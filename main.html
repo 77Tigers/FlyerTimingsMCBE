@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flyer Editor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, sans-serif;
+            background: #1e1e2f;
+            color: #eee;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #app {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: #111;
+            min-width: 0;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        #sidebar {
+            width: 340px;
+            background: #262638;
+            padding: 16px;
+            overflow-y: auto;
+            border-left: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        h2, h3 {
+            margin: 0 0 6px;
+            font-weight: 500;
+        }
+        .panel {
+            background: #2e2e42;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        input[type="number"], input[type="text"], textarea {
+            background: #1a1a28;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 14px;
+            width: 100%;
+        }
+        input[type="number"] {
+            width: 70px;
+        }
+        button {
+            background: #3a3a50;
+            color: #eee;
+            border: 1px solid #666;
+            border-radius: 4px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        button:hover { background: #4a4a64; }
+        button.active { background: #4a90d9; border-color: #7ab4f0; }
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            margin-right: 6px;
+            border: 1px solid #888;
+        }
+        .seg-item {
+            display: flex;
+            align-items: center;
+            padding: 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 2px;
+        }
+        .seg-item:hover { background: #3a3a50; }
+        .seg-item.selected { background: #44446a; outline: 1px solid #fff; }
+        .colour-btn {
+            flex: 1;
+            padding: 8px 4px;
+            font-weight: bold;
+        }
+        .colour-btn.slime { background: #7cc24e; color: #111; }
+        .colour-btn.honey { background: #f2c144; color: #111; }
+        .colour-btn.blue { background: #4a8fd4; color: #111; }
+        #status {
+            min-height: 20px;
+            font-size: 13px;
+            color: #f88;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        #jsonArea {
+            height: 120px;
+            resize: vertical;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .time-display {
+            font-size: 15px;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+    <div id="sidebar">
+        <h2>Flyer Editor</h2>
+
+        <div class="panel">
+            <h3>Cycle Meta</h3>
+            <div class="row">
+                <label>L: <input id="L" type="number" min="2" step="1"></label>
+                <label>B: <input id="B" type="number" min="0" step="1"></label>
+                <button id="applyMeta">Apply</button>
+            </div>
+            <div class="row time-display" id="time-display">t = 0.0</div>
+        </div>
+
+        <div class="panel">
+            <h3>Time</h3>
+            <div class="row">
+                <button id="step-2">-2 rt</button>
+                <button id="step-1">-1 rt</button>
+                <button id="reset">Start</button>
+                <button id="step+1">+1 rt</button>
+                <button id="step+2">+2 rt</button>
+                <button id="play">Play</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Segments</h3>
+            <div id="segments-list"></div>
+        </div>
+
+        <div class="panel" id="selected-panel">
+            <h3>Selected Segment</h3>
+            <label>Name: <input id="segName" type="text" placeholder="Segment name"></label>
+            <div class="row">
+                <button class="colour-btn slime" data-colour="slime">Slime</button>
+                <button class="colour-btn honey" data-colour="honey">Honey</button>
+                <button class="colour-btn blue" data-colour="blue">Blue</button>
+            </div>
+            <label>Timings: <input id="timingInput" type="text" placeholder="0 1 2 m w"></label>
+            <button id="applyTiming">Apply Timings</button>
+        </div>
+
+        <div class="panel">
+            <h3>Export / Import</h3>
+            <textarea id="jsonArea" placeholder="JSON flyer data"></textarea>
+            <div class="row" style="margin-top: 8px;">
+                <button id="export">Export JSON</button>
+                <button id="import">Import JSON</button>
+            </div>
+        </div>
+
+        <div id="status"></div>
+    </div>
+</div>
+
+<script>
+    'use strict';
+
+    // ---------- Colour map ----------
+    const COLOURS = {
+        slime: '#7cc24e',
+        honey: '#f2c144',
+        blue: '#4a8fd4'
+    };
+
+    // ---------- Default scene ----------
+    function defaultScene() {
+        const L = 8;
+        const B = 2;
+        const movement = [1, 2, 0, 0, 1, 2, 0, 0];
+        return {
+            L,
+            B,
+            segments: [
+                {
+                    id: 1,
+                    colour: 'slime',
+                    name: 'Core',
+                    blocks: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+                    movement: movement.slice()
+                },
+                {
+                    id: 2,
+                    colour: 'honey',
+                    name: 'Piston',
+                    blocks: [{ x: 2, y: 0 }, { x: 2, y: 1 }],
+                    movement: movement.slice()
+                }
+            ],
+            nextId: 3
+        };
+    }
+
+    // ---------- State ----------
+    let scene = defaultScene();
+    let currentTime = 0;
+    let playing = false;
+    let playSpeed = 2; // rt per second
+
+    let selectedSegmentId = 1;
+    let hoveredSegmentId = null;
+    let conflictSegments = new Set();
+    let conflictUntil = 0;
+
+    let mouseX = 0;
+    let mouseY = 0;
+    let rightMouseDown = false;
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let blockSize = 40;
+    let originX = 0;
+    let originY = 0;
+
+    // ---------- Cloning ----------
+    function cloneScene(s) {
+        return JSON.parse(JSON.stringify(s));
+    }
+
+    // ---------- Utility ----------
+    function countTwosBefore(movement, t) {
+        let c = 0;
+        for (let i = 0; i < t; i++) if (movement[i] === 2) c++;
+        return c;
+    }
+
+    function getSegmentOffset(seg, time) {
+        const L = scene.L;
+        const t = ((time % L) + L) % L;
+        const i = Math.floor(t);
+        return countTwosBefore(seg.movement, i);
+    }
+
+    function visStateValue(s) {
+        if (s === 1) return 0.2;
+        if (s === 2) return 0.8;
+        return 0;
+    }
+
+    // Visual world offset for a segment at continuous time, before camera subtraction.
+    function getVisualOffset(seg, time) {
+        const L = scene.L;
+        const t = ((time % L) + L) % L;
+        const i = Math.floor(t);
+        const f = t - i;
+
+        const offset_i = countTwosBefore(seg.movement, i);
+        const state_i = seg.movement[i];
+        const vi = offset_i + visStateValue(state_i);
+
+        let nextOffset, nextState;
+        if (i === L - 1) {
+            nextOffset = scene.B;
+            nextState = seg.movement[0];
+        } else {
+            nextOffset = countTwosBefore(seg.movement, i + 1);
+            nextState = seg.movement[i + 1];
+        }
+        const vn = nextOffset + visStateValue(nextState);
+
+        return vi + (vn - vi) * f;
+    }
+
+    // ---------- Validation ----------
+    function validateScene(scene) {
+        const conflicts = new Set();
+        const errors = [];
+
+        if (2 * scene.B > scene.L) {
+            errors.push(`2B <= L violated: B=${scene.B}, L=${scene.L}`);
+            scene.segments.forEach(s => conflicts.add(s.id));
+            return { valid: false, conflicts, errors };
+        }
+
+        let movementValid = true;
+
+        for (const seg of scene.segments) {
+            if (seg.movement.length !== scene.L) {
+                errors.push(`Segment ${seg.id}: movement length ${seg.movement.length} != L ${scene.L}`);
+                conflicts.add(seg.id);
+                movementValid = false;
+                continue;
+            }
+
+            const ones = seg.movement.filter(v => v === 1).length;
+            if (ones !== scene.B) {
+                errors.push(`Segment ${seg.id}: number of 1s ${ones} != B ${scene.B}`);
+                conflicts.add(seg.id);
+                movementValid = false;
+            }
+
+            for (let i = 0; i < scene.L; i++) {
+                if (seg.movement[i] === 1 && seg.movement[(i + 1) % scene.L] !== 2) {
+                    errors.push(`Segment ${seg.id}: 1 at index ${i} is not followed by 2`);
+                    conflicts.add(seg.id);
+                    movementValid = false;
+                }
+                if (seg.movement[i] === 2 && seg.movement[(i - 1 + scene.L) % scene.L] !== 1) {
+                    errors.push(`Segment ${seg.id}: 2 at index ${i} is not preceded by 1`);
+                    conflicts.add(seg.id);
+                    movementValid = false;
+                }
+            }
+        }
+
+        if (!movementValid) {
+            return { valid: false, conflicts, errors };
+        }
+
+        // Collision and adjacency at each integer time step.
+        for (let t = 0; t < scene.L; t++) {
+            const map = new Map(); // key -> { segId, state, colour }
+            let overlap = false;
+
+            for (const seg of scene.segments) {
+                const offset = countTwosBefore(seg.movement, t);
+                const state = seg.movement[t];
+
+                for (const block of seg.blocks) {
+                    const y = block.y + offset;
+                    const key = `${block.x},${y}`;
+                    if (map.has(key)) {
+                        errors.push(`Overlap at time ${t} at (${key}) between segments ${map.get(key).segId} and ${seg.id}`);
+                        conflicts.add(seg.id);
+                        conflicts.add(map.get(key).segId);
+                        overlap = true;
+                    } else {
+                        map.set(key, { segId: seg.id, state, colour: seg.colour });
+                    }
+                }
+            }
+
+            if (overlap) continue;
+
+            // Adjacency restrictions for same-colour, different-segment blocks.
+            for (const [key, entry] of map) {
+                const [x, y] = key.split(',').map(Number);
+                const neighbours = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
+                for (const [nx, ny] of neighbours) {
+                    const nKey = `${nx},${ny}`;
+                    const nEntry = map.get(nKey);
+                    if (!nEntry) continue;
+                    if (nEntry.segId === entry.segId) continue;
+                    if (nEntry.colour !== entry.colour) continue;
+
+                    const s1 = entry.state;
+                    const s2 = nEntry.state;
+                    if (s1 === 0 || s2 === 0 || (s1 === 1 && s2 === 2) || (s1 === 2 && s2 === 1)) {
+                        errors.push(`Same-colour adjacency conflict at time ${t} between segments ${entry.segId} and ${nEntry.segId}`);
+                        conflicts.add(entry.segId);
+                        conflicts.add(nEntry.segId);
+                    }
+                }
+            }
+        }
+
+        return { valid: errors.length === 0, conflicts, errors };
+    }
+
+    // ---------- Conflict helpers ----------
+    function setConflicts(conflicts) {
+        conflictSegments = new Set(conflicts);
+        conflictUntil = performance.now() + 2000;
+    }
+
+    function clearConflicts() {
+        conflictSegments.clear();
+        conflictUntil = 0;
+    }
+
+    // ---------- Status ----------
+    const statusDiv = document.getElementById('status');
+    function showStatus(msg, isError = true) {
+        statusDiv.textContent = msg;
+        statusDiv.style.color = isError ? '#f88' : '#8f8';
+        clearTimeout(showStatus._timeout);
+        showStatus._timeout = setTimeout(() => { statusDiv.textContent = ''; }, 4000);
+    }
+
+    // ---------- Canvas sizing ----------
+    function resizeCanvas() {
+        const container = document.getElementById('canvas-container');
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        originX = canvas.width / 2;
+        originY = canvas.height / 2;
+        blockSize = Math.max(20, Math.min(canvas.width, canvas.height) / 15);
+        draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // ---------- Drawing ----------
+    function getCameraY() {
+        return scene.B * currentTime / scene.L;
+    }
+
+    function drawGrid(camY) {
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+
+        const worldLeft = -originX / blockSize;
+        const worldRight = (canvas.width - originX) / blockSize;
+        const worldBottom = camY - originY / blockSize;
+        const worldTop = camY + (canvas.height - originY) / blockSize;
+
+        for (let x = Math.floor(worldLeft); x <= Math.ceil(worldRight); x++) {
+            const sx = originX + x * blockSize;
+            ctx.beginPath();
+            ctx.moveTo(sx, 0);
+            ctx.lineTo(sx, canvas.height);
+            ctx.stroke();
+        }
+        for (let y = Math.floor(worldBottom); y <= Math.ceil(worldTop); y++) {
+            const sy = originY - (y - camY) * blockSize;
+            ctx.beginPath();
+            ctx.moveTo(0, sy);
+            ctx.lineTo(canvas.width, sy);
+            ctx.stroke();
+        }
+    }
+
+    function drawBlock(sx, sy, colour, selected, conflict) {
+        ctx.fillStyle = COLOURS[colour];
+        ctx.fillRect(sx, sy, blockSize, blockSize);
+
+        ctx.save();
+        if (conflict) {
+            ctx.shadowColor = '#ff4444';
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 12;
+        } else if (selected) {
+            ctx.shadowColor = '#ffffff';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 10;
+        } else {
+            ctx.shadowColor = COLOURS[colour];
+            ctx.strokeStyle = COLOURS[colour];
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 8;
+        }
+        ctx.strokeRect(sx, sy, blockSize, blockSize);
+        ctx.restore();
+    }
+
+    function drawSegmentName(seg, visOff, camY) {
+        if (!seg.name || seg.blocks.length === 0) return;
+        let avgX = 0, avgY = 0;
+        for (const b of seg.blocks) {
+            avgX += b.x;
+            avgY += b.y + visOff;
+        }
+        avgX /= seg.blocks.length;
+        avgY /= seg.blocks.length;
+
+        const sx = originX + avgX * blockSize;
+        const sy = originY - (avgY + 1 - camY) * blockSize - 5;
+
+        ctx.font = '14px system-ui, sans-serif';
+        const metrics = ctx.measureText(seg.name);
+        const w = metrics.width + 8;
+        const h = 20;
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fillRect(sx - w / 2, sy - h + 4, w, h);
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(seg.name, sx, sy - h / 2 + 6);
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const L = scene.L;
+        const B = scene.B;
+        const t = ((currentTime % L) + L) % L;
+        const camY = B * t / L;
+
+        drawGrid(camY);
+
+        for (const seg of scene.segments) {
+            const visOff = getVisualOffset(seg, t);
+            const isSelected = seg.id === selectedSegmentId;
+            const isConflict = conflictSegments.has(seg.id) && performance.now() < conflictUntil;
+
+            for (const block of seg.blocks) {
+                const worldX = block.x;
+                const worldY = block.y + visOff;
+                const sx = originX + worldX * blockSize;
+                const sy = originY - (worldY + 1 - camY) * blockSize;
+                drawBlock(sx, sy, seg.colour, isSelected, isConflict);
+            }
+
+            drawSegmentName(seg, visOff, camY);
+        }
+    }
+
+    // ---------- Mouse helpers ----------
+    function updateMouse(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+        mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    }
+
+    function getGridCellFromMouse() {
+        const camY = getCameraY();
+        const worldX = (mouseX - originX) / blockSize;
+        const worldY = camY + (originY - mouseY) / blockSize;
+        return {
+            x: Math.floor(worldX),
+            y: Math.floor(worldY)
+        };
+    }
+
+    function hitTestLogical() {
+        const camY = getCameraY();
+        for (const seg of scene.segments) {
+            const offset = getSegmentOffset(seg, currentTime);
+            for (const b of seg.blocks) {
+                const worldX = b.x;
+                const worldY = b.y + offset;
+                const sx = originX + worldX * blockSize;
+                const sy = originY - (worldY + 1 - camY) * blockSize;
+                if (mouseX >= sx && mouseX <= sx + blockSize && mouseY >= sy && mouseY <= sy + blockSize) {
+                    return seg.id;
+                }
+            }
+        }
+        return null;
+    }
+
+    // ---------- Block editing ----------
+    function addBlockAtMouse() {
+        if (!selectedSegmentId) return;
+        const seg = scene.segments.find(s => s.id === selectedSegmentId);
+        if (!seg) return;
+
+        const cell = getGridCellFromMouse();
+        const offset = getSegmentOffset(seg, currentTime);
+        const startPos = { x: cell.x, y: cell.y - offset };
+
+        // Right-clicking on an existing segment does nothing.
+        if (seg.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
+        for (const s of scene.segments) {
+            if (s.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
+        }
+        // Also check current logical occupancy.
+        for (const s of scene.segments) {
+            const off = getSegmentOffset(s, currentTime);
+            if (s.blocks.some(b => b.x === cell.x && b.y + off === cell.y)) return;
+        }
+
+        const oldScene = cloneScene(scene);
+        seg.blocks.push(startPos);
+        const result = validateScene(scene);
+
+        if (result.valid) {
+            clearConflicts();
+            showStatus('Block added.', false);
+            updateUI();
+        } else {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            showStatus('Invalid placement: ' + result.errors[0]);
+            updateUI();
+        }
+    }
+
+    function removeBlockAtMouse() {
+        if (!selectedSegmentId) return;
+        const seg = scene.segments.find(s => s.id === selectedSegmentId);
+        if (!seg) return;
+
+        const cell = getGridCellFromMouse();
+        const offset = getSegmentOffset(seg, currentTime);
+        const idx = seg.blocks.findIndex(b => b.x === cell.x && b.y + offset === cell.y);
+        if (idx === -1) return;
+
+        const oldScene = cloneScene(scene);
+        seg.blocks.splice(idx, 1);
+        const result = validateScene(scene);
+
+        if (result.valid) {
+            clearConflicts();
+            showStatus('Block removed.', false);
+            updateUI();
+        } else {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            showStatus('Removal would break invariants: ' + result.errors[0]);
+            updateUI();
+        }
+    }
+
+    // ---------- Segment colour / name ----------
+    function setSegmentColour(id, colour) {
+        const seg = scene.segments.find(s => s.id === id);
+        if (!seg) return;
+        const oldScene = cloneScene(scene);
+        seg.colour = colour;
+        const result = validateScene(scene);
+        if (result.valid) {
+            clearConflicts();
+            showStatus('Colour changed.', false);
+            updateUI();
+        } else {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            showStatus('Colour change invalid: ' + result.errors[0]);
+            updateUI();
+        }
+    }
+
+    // ---------- Timings ----------
+    function unfoldTiming(raw) {
+        const out = [];
+        for (const ch of raw.trim()) {
+            if (ch === '0') out.push(0);
+            else if (ch === '1') out.push(1);
+            else if (ch === '2') out.push(2);
+            else if (ch === 'm' || ch === 'M') out.push(1, 2);
+            else if (ch === 'w' || ch === 'W') out.push(0, 0);
+            else return null;
+        }
+        return out;
+    }
+
+    function applyTiming() {
+        if (!selectedSegmentId) return;
+        const seg = scene.segments.find(s => s.id === selectedSegmentId);
+        if (!seg) return;
+
+        const raw = document.getElementById('timingInput').value;
+        const unfolded = unfoldTiming(raw);
+
+        if (!unfolded) {
+            showStatus('Timings may only contain 0, 1, 2, m, w.');
+            return;
+        }
+        if (unfolded.length !== scene.L) {
+            setConflicts([seg.id]);
+            currentTime = 0;
+            showStatus(`Timing length after unfolding is ${unfolded.length}, but L is ${scene.L}.`);
+            updateUI();
+            return;
+        }
+
+        const oldScene = cloneScene(scene);
+        seg.movement = unfolded;
+        const result = validateScene(scene);
+
+        if (result.valid) {
+            clearConflicts();
+            currentTime = 0;
+            showStatus('Timings updated.', false);
+            updateUI();
+        } else {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            currentTime = 0;
+            showStatus('Timing change invalid: ' + result.errors[0]);
+            updateUI();
+        }
+    }
+
+    // ---------- Meta ----------
+    function applyMeta() {
+        const LInput = document.getElementById('L');
+        const BInput = document.getElementById('B');
+        const newL = parseInt(LInput.value, 10);
+        const newB = parseInt(BInput.value, 10);
+
+        if (!Number.isInteger(newL) || newL < 2) {
+            showStatus('L must be an integer >= 2.');
+            return;
+        }
+        if (!Number.isInteger(newB) || newB < 0) {
+            showStatus('B must be a non-negative integer.');
+            return;
+        }
+
+        const oldScene = cloneScene(scene);
+        scene.L = newL;
+        scene.B = newB;
+
+        for (const seg of scene.segments) {
+            if (seg.movement.length > newL) {
+                seg.movement = seg.movement.slice(0, newL);
+            } else if (seg.movement.length < newL) {
+                while (seg.movement.length < newL) seg.movement.push(0);
+            }
+        }
+
+        const result = validateScene(scene);
+        if (result.valid) {
+            clearConflicts();
+            currentTime = 0;
+            showStatus('Meta applied.', false);
+            updateUI();
+        } else {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            currentTime = 0;
+            showStatus('Meta change invalid: ' + result.errors[0]);
+            updateUI();
+        }
+    }
+
+    // ---------- Export / Import ----------
+    function exportJSON() {
+        document.getElementById('jsonArea').value = JSON.stringify(scene, null, 2);
+        showStatus('Exported to textarea.', false);
+    }
+
+    function importJSON() {
+        try {
+            const data = JSON.parse(document.getElementById('jsonArea').value);
+            if (!data || !Array.isArray(data.segments)) throw new Error('JSON must contain a segments array.');
+            data.L = Number(data.L);
+            data.B = Number(data.B);
+            data.nextId = data.segments.reduce((max, s) => Math.max(max, s.id || 0), 0) + 1;
+
+            const result = validateScene(data);
+            if (!result.valid) {
+                setConflicts(result.conflicts);
+                showStatus('Import invalid: ' + result.errors[0]);
+                return;
+            }
+
+            scene = data;
+            currentTime = 0;
+            clearConflicts();
+            if (scene.segments.length > 0) selectedSegmentId = scene.segments[0].id;
+            updateUI();
+            showStatus('Imported successfully.', false);
+        } catch (e) {
+            showStatus('Import error: ' + e.message);
+        }
+    }
+
+    // ---------- UI updates ----------
+    function updateSegmentList() {
+        const list = document.getElementById('segments-list');
+        list.innerHTML = '';
+        for (const seg of scene.segments) {
+            const div = document.createElement('div');
+            div.className = 'seg-item' + (seg.id === selectedSegmentId ? ' selected' : '');
+            const swatch = document.createElement('span');
+            swatch.className = 'swatch';
+            swatch.style.background = COLOURS[seg.colour];
+            div.appendChild(swatch);
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = seg.name || `Segment ${seg.id}`;
+            div.appendChild(nameSpan);
+            div.addEventListener('click', () => {
+                selectedSegmentId = seg.id;
+                updateUI();
+            });
+            list.appendChild(div);
+        }
+    }
+
+    function updateSelectedPanel() {
+        const seg = scene.segments.find(s => s.id === selectedSegmentId);
+        const nameInput = document.getElementById('segName');
+        const timingInput = document.getElementById('timingInput');
+        if (!seg) {
+            nameInput.value = '';
+            timingInput.value = '';
+            return;
+        }
+        nameInput.value = seg.name || '';
+        timingInput.value = seg.movement.join('');
+    }
+
+    function updateTimeDisplay() {
+        document.getElementById('time-display').textContent =
+            `t = ${currentTime.toFixed(1)} / ${scene.L} rt`;
+    }
+
+    function updateUI() {
+        updateSegmentList();
+        updateSelectedPanel();
+        updateTimeDisplay();
+        draw();
+    }
+
+    // ---------- Time stepping / playback ----------
+    function stepTime(delta) {
+        currentTime += delta;
+        currentTime = ((currentTime % scene.L) + scene.L) % scene.L;
+        updateUI();
+    }
+
+    function togglePlay() {
+        playing = !playing;
+        document.getElementById('play').textContent = playing ? 'Pause' : 'Play';
+    }
+
+    // ---------- Animation loop ----------
+    let lastTime = performance.now();
+    function animate(now) {
+        if (playing) {
+            const dt = (now - lastTime) / 1000;
+            currentTime += dt * playSpeed;
+            currentTime = ((currentTime % scene.L) + scene.L) % scene.L;
+            updateTimeDisplay();
+        }
+        lastTime = now;
+        draw();
+        requestAnimationFrame(animate);
+    }
+
+    // ---------- Event wiring ----------
+    canvas.addEventListener('mousemove', (e) => {
+        updateMouse(e);
+        if (rightMouseDown) {
+            addBlockAtMouse();
+        } else {
+            const hit = hitTestLogical();
+            if (hit) {
+                hoveredSegmentId = hit;
+                selectedSegmentId = hit;
+                updateUI();
+            } else {
+                hoveredSegmentId = null;
+                // keep previous selection
+            }
+        }
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.button === 2) {
+            rightMouseDown = true;
+            updateMouse(e);
+            addBlockAtMouse();
+            e.preventDefault();
+        } else if (e.button === 0) {
+            updateMouse(e);
+            removeBlockAtMouse();
+        }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (e.button === 2) rightMouseDown = false;
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        rightMouseDown = false;
+    });
+
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // UI buttons
+    document.getElementById('step-2').addEventListener('click', () => stepTime(-2));
+    document.getElementById('step-1').addEventListener('click', () => stepTime(-1));
+    document.getElementById('reset').addEventListener('click', () => stepTime(0));
+    document.getElementById('step+1').addEventListener('click', () => stepTime(1));
+    document.getElementById('step+2').addEventListener('click', () => stepTime(2));
+    document.getElementById('play').addEventListener('click', togglePlay);
+    document.getElementById('applyMeta').addEventListener('click', applyMeta);
+    document.getElementById('applyTiming').addEventListener('click', applyTiming);
+    document.getElementById('export').addEventListener('click', exportJSON);
+    document.getElementById('import').addEventListener('click', importJSON);
+
+    document.querySelectorAll('.colour-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const colour = btn.dataset.colour;
+            setSegmentColour(selectedSegmentId, colour);
+        });
+    });
+
+    document.getElementById('segName').addEventListener('input', (e) => {
+        const seg = scene.segments.find(s => s.id === selectedSegmentId);
+        if (seg) {
+            seg.name = e.target.value;
+            updateSegmentList();
+            draw();
+        }
+    });
+
+    // ---------- Initialisation ----------
+    function init() {
+        document.getElementById('L').value = scene.L;
+        document.getElementById('B').value = scene.B;
+        selectedSegmentId = scene.segments.length ? scene.segments[0].id : null;
+        resizeCanvas();
+        updateUI();
+        exportJSON();
+        requestAnimationFrame(animate);
+    }
+
+    init();
+</script>
+</body>
+</html>
