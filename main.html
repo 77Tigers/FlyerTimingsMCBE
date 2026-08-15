@@ -69,6 +69,9 @@
         input[type="number"] {
             width: 70px;
         }
+        input[type="range"] {
+            flex: 1;
+        }
         button {
             background: #3a3a50;
             color: #eee;
@@ -129,6 +132,54 @@
             font-size: 15px;
             font-variant-numeric: tabular-nums;
         }
+        #speedValue {
+            font-size: 13px;
+            min-width: 62px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Selected-segment bar: pinned to the bottom of the whole screen,
+           hidden entirely when nothing is selected. */
+        #selected-panel {
+            display: none;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 20;
+            background: #262638;
+            border-top: 1px solid #444;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.35);
+            padding: 10px 16px;
+            align-items: center;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+        #selected-panel h3 {
+            margin: 0;
+            font-size: 13px;
+            color: #aab;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+        #selected-panel .field-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #selected-panel label {
+            margin-bottom: 0;
+            white-space: nowrap;
+        }
+        #selected-panel input[type="text"] {
+            width: 160px;
+        }
+        #timingInput {
+            width: 140px !important;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -159,23 +210,17 @@
                 <button id="step+2">+2 rt</button>
                 <button id="play">Play</button>
             </div>
+            <div class="row" style="margin-top: 8px;">
+                <label style="flex:1; margin-bottom:0;">Speed
+                    <input id="speedSlider" type="range" min="2" max="20" step="0.5" value="2">
+                </label>
+                <span id="speedValue">2.0 rt/s</span>
+            </div>
         </div>
 
         <div class="panel">
             <h3>Segments</h3>
             <div id="segments-list"></div>
-        </div>
-
-        <div class="panel" id="selected-panel">
-            <h3>Selected Segment</h3>
-            <label>Name: <input id="segName" type="text" placeholder="Segment name"></label>
-            <div class="row">
-                <button class="colour-btn slime" data-colour="slime">Slime</button>
-                <button class="colour-btn honey" data-colour="honey">Honey</button>
-                <button class="colour-btn blue" data-colour="blue">Blue</button>
-            </div>
-            <label>Timings: <input id="timingInput" type="text" placeholder="0 1 2 m w"></label>
-            <button id="applyTiming">Apply Timings</button>
         </div>
 
         <div class="panel">
@@ -188,6 +233,22 @@
         </div>
 
         <div id="status"></div>
+    </div>
+</div>
+
+<div id="selected-panel">
+    <h3>Selected Segment</h3>
+    <div class="field-group">
+        <label>Name: <input id="segName" type="text" placeholder="Segment name"></label>
+    </div>
+    <div class="field-group">
+        <button class="colour-btn slime" data-colour="slime">Slime</button>
+        <button class="colour-btn honey" data-colour="honey">Honey</button>
+        <button class="colour-btn blue" data-colour="blue">Blue</button>
+    </div>
+    <div class="field-group">
+        <label>Timings: <input id="timingInput" type="text" placeholder="0 1 2 m w"></label>
+        <button id="applyTiming">Apply Timings</button>
     </div>
 </div>
 
@@ -243,9 +304,22 @@
     let mouseX = 0;
     let mouseY = 0;
     let rightMouseDown = false;
+    let leftMouseDown = false;
+
+    // Panning / zoom state. Pan is stored in world (block) units; zoom is a
+    // multiplier applied on top of the base block size computed on resize.
+    let panning = false;
+    let panStartScreen = { x: 0, y: 0 };
+    let panStartOffset = { x: 0, y: 0 };
+    let panOffsetX = 0;
+    let panOffsetY = 0;
+    let zoomScale = 1;
+    const MIN_ZOOM = 0.2;
+    const MAX_ZOOM = 6;
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    let baseBlockSize = 40;
     let blockSize = 40;
     let originX = 0;
     let originY = 0;
@@ -423,10 +497,25 @@
         canvas.height = rect.height;
         originX = canvas.width / 2;
         originY = canvas.height / 2;
-        blockSize = Math.max(20, Math.min(canvas.width, canvas.height) / 15);
+        baseBlockSize = Math.max(20, Math.min(canvas.width, canvas.height) / 15);
+        blockSize = baseBlockSize * zoomScale;
         draw();
     }
     window.addEventListener('resize', resizeCanvas);
+
+    // ---------- Coordinate transforms (pan + zoom aware) ----------
+    function worldToScreenX(wx) {
+        return originX + (wx - panOffsetX) * blockSize;
+    }
+    function worldToScreenY(wy, camY) {
+        return originY - (wy - camY - panOffsetY) * blockSize;
+    }
+    function screenToWorldX(sx) {
+        return panOffsetX + (sx - originX) / blockSize;
+    }
+    function screenToWorldY(sy, camY) {
+        return camY + panOffsetY + (originY - sy) / blockSize;
+    }
 
     // ---------- Drawing ----------
     function getCameraY() {
@@ -437,20 +526,20 @@
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 1;
 
-        const worldLeft = -originX / blockSize;
-        const worldRight = (canvas.width - originX) / blockSize;
-        const worldBottom = camY - originY / blockSize;
-        const worldTop = camY + (canvas.height - originY) / blockSize;
+        const worldLeft = panOffsetX - originX / blockSize;
+        const worldRight = panOffsetX + (canvas.width - originX) / blockSize;
+        const worldBottom = camY + panOffsetY - originY / blockSize;
+        const worldTop = camY + panOffsetY + (canvas.height - originY) / blockSize;
 
         for (let x = Math.floor(worldLeft); x <= Math.ceil(worldRight); x++) {
-            const sx = originX + x * blockSize;
+            const sx = worldToScreenX(x);
             ctx.beginPath();
             ctx.moveTo(sx, 0);
             ctx.lineTo(sx, canvas.height);
             ctx.stroke();
         }
         for (let y = Math.floor(worldBottom); y <= Math.ceil(worldTop); y++) {
-            const sy = originY - (y - camY) * blockSize;
+            const sy = worldToScreenY(y, camY);
             ctx.beginPath();
             ctx.moveTo(0, sy);
             ctx.lineTo(canvas.width, sy);
@@ -458,28 +547,59 @@
         }
     }
 
-    function drawBlock(sx, sy, colour, selected, conflict) {
-        ctx.fillStyle = COLOURS[colour];
-        ctx.fillRect(sx, sy, blockSize, blockSize);
-
-        ctx.save();
-        if (conflict) {
-            ctx.shadowColor = '#ff4444';
-            ctx.strokeStyle = '#ff4444';
-            ctx.lineWidth = 3;
-            ctx.shadowBlur = 12;
-        } else if (selected) {
-            ctx.shadowColor = '#ffffff';
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
-            ctx.shadowBlur = 10;
-        } else {
-            ctx.shadowColor = COLOURS[colour];
-            ctx.strokeStyle = COLOURS[colour];
-            ctx.lineWidth = 2;
-            ctx.shadowBlur = 8;
+    // Exterior edges of a segment's shape, in local (unshifted) block
+    // coordinates. An edge is exterior if the neighbouring cell on that
+    // side is not part of the same segment. Each edge is [x1, y1, x2, y2].
+    function computeExteriorEdges(seg) {
+        const set = new Set(seg.blocks.map(b => `${b.x},${b.y}`));
+        const edges = [];
+        for (const b of seg.blocks) {
+            if (!set.has(`${b.x + 1},${b.y}`)) edges.push([b.x + 1, b.y, b.x + 1, b.y + 1]);
+            if (!set.has(`${b.x - 1},${b.y}`)) edges.push([b.x, b.y, b.x, b.y + 1]);
+            if (!set.has(`${b.x},${b.y + 1}`)) edges.push([b.x, b.y + 1, b.x + 1, b.y + 1]);
+            if (!set.has(`${b.x},${b.y - 1}`)) edges.push([b.x, b.y, b.x + 1, b.y]);
         }
-        ctx.strokeRect(sx, sy, blockSize, blockSize);
+        return edges;
+    }
+
+    function drawSegmentBlocks(seg, visOff, camY, isSelected, isConflict) {
+        ctx.fillStyle = COLOURS[seg.colour];
+        for (const block of seg.blocks) {
+            const worldX = block.x;
+            const worldY = block.y + visOff;
+            const sx = worldToScreenX(worldX);
+            const sy = worldToScreenY(worldY + 1, camY);
+            ctx.fillRect(sx, sy, blockSize, blockSize);
+        }
+
+        // Only the highlighted (selected/hovered) segment, or a segment
+        // currently flagged as causing an invariant conflict, gets a glowing
+        // outline traced around the boundary of its shape.
+        if (!isSelected && !isConflict) return;
+
+        const edges = computeExteriorEdges(seg);
+        ctx.save();
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 12;
+        if (isConflict) {
+            ctx.strokeStyle = '#ff4444';
+            ctx.shadowColor = '#ff4444';
+        } else {
+            ctx.strokeStyle = '#ffffff';
+            ctx.shadowColor = '#ffffff';
+        }
+        ctx.beginPath();
+        for (const [x1, y1, x2, y2] of edges) {
+            const p1x = worldToScreenX(x1);
+            const p1y = worldToScreenY(y1 + visOff, camY);
+            const p2x = worldToScreenX(x2);
+            const p2y = worldToScreenY(y2 + visOff, camY);
+            ctx.moveTo(p1x, p1y);
+            ctx.lineTo(p2x, p2y);
+        }
+        ctx.stroke();
         ctx.restore();
     }
 
@@ -493,19 +613,22 @@
         avgX /= seg.blocks.length;
         avgY /= seg.blocks.length;
 
-        const sx = originX + avgX * blockSize;
-        const sy = originY - (avgY + 1 - camY) * blockSize - 5;
+        // Anchor point sits just above the segment's bounding centre.
+        const anchorX = worldToScreenX(avgX + 0.5);
+        const anchorY = worldToScreenY(avgY + 1, camY) - 14;
 
         ctx.font = '14px system-ui, sans-serif';
         const metrics = ctx.measureText(seg.name);
         const w = metrics.width + 8;
         const h = 20;
+
         ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.fillRect(sx - w / 2, sy - h + 4, w, h);
+        ctx.fillRect(anchorX - w / 2, anchorY - h / 2, w, h);
+
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(seg.name, sx, sy - h / 2 + 6);
+        ctx.fillText(seg.name, anchorX, anchorY);
     }
 
     function draw() {
@@ -522,14 +645,7 @@
             const isSelected = seg.id === selectedSegmentId;
             const isConflict = conflictSegments.has(seg.id) && performance.now() < conflictUntil;
 
-            for (const block of seg.blocks) {
-                const worldX = block.x;
-                const worldY = block.y + visOff;
-                const sx = originX + worldX * blockSize;
-                const sy = originY - (worldY + 1 - camY) * blockSize;
-                drawBlock(sx, sy, seg.colour, isSelected, isConflict);
-            }
-
+            drawSegmentBlocks(seg, visOff, camY, isSelected, isConflict);
             drawSegmentName(seg, visOff, camY);
         }
     }
@@ -543,8 +659,8 @@
 
     function getGridCellFromMouse() {
         const camY = getCameraY();
-        const worldX = (mouseX - originX) / blockSize;
-        const worldY = camY + (originY - mouseY) / blockSize;
+        const worldX = screenToWorldX(mouseX);
+        const worldY = screenToWorldY(mouseY, camY);
         return {
             x: Math.floor(worldX),
             y: Math.floor(worldY)
@@ -558,8 +674,8 @@
             for (const b of seg.blocks) {
                 const worldX = b.x;
                 const worldY = b.y + offset;
-                const sx = originX + worldX * blockSize;
-                const sy = originY - (worldY + 1 - camY) * blockSize;
+                const sx = worldToScreenX(worldX);
+                const sy = worldToScreenY(worldY + 1, camY);
                 if (mouseX >= sx && mouseX <= sx + blockSize && mouseY >= sy && mouseY <= sy + blockSize) {
                     return seg.id;
                 }
@@ -664,6 +780,27 @@
         return out;
     }
 
+    // Folds a movement array back into the m/w abbreviated display form:
+    // "12" -> "m", "00" -> "w", read greedily left to right.
+    function foldTiming(movement) {
+        const raw = movement.join('');
+        let out = '';
+        let i = 0;
+        while (i < raw.length) {
+            if (raw[i] === '1' && raw[i + 1] === '2') {
+                out += 'm';
+                i += 2;
+            } else if (raw[i] === '0' && raw[i + 1] === '0') {
+                out += 'w';
+                i += 2;
+            } else {
+                out += raw[i];
+                i += 1;
+            }
+        }
+        return out;
+    }
+
     function applyTiming() {
         if (!selectedSegmentId) return;
         const seg = scene.segments.find(s => s.id === selectedSegmentId);
@@ -747,7 +884,8 @@
 
     // ---------- Export / Import ----------
     function exportJSON() {
-        document.getElementById('jsonArea').value = JSON.stringify(scene, null, 2);
+        // Compact, no newlines or extra whitespace, to keep copy/paste short.
+        document.getElementById('jsonArea').value = JSON.stringify(scene);
         showStatus('Exported to textarea.', false);
     }
 
@@ -770,6 +908,7 @@
             currentTime = 0;
             clearConflicts();
             if (scene.segments.length > 0) selectedSegmentId = scene.segments[0].id;
+            else selectedSegmentId = null;
             updateUI();
             showStatus('Imported successfully.', false);
         } catch (e) {
@@ -800,16 +939,21 @@
     }
 
     function updateSelectedPanel() {
+        const panel = document.getElementById('selected-panel');
         const seg = scene.segments.find(s => s.id === selectedSegmentId);
         const nameInput = document.getElementById('segName');
         const timingInput = document.getElementById('timingInput');
+
         if (!seg) {
+            panel.style.display = 'none';
             nameInput.value = '';
             timingInput.value = '';
             return;
         }
+
+        panel.style.display = 'flex';
         nameInput.value = seg.name || '';
-        timingInput.value = seg.movement.join('');
+        timingInput.value = foldTiming(seg.movement);
     }
 
     function updateTimeDisplay() {
@@ -828,6 +972,11 @@
     function stepTime(delta) {
         currentTime += delta;
         currentTime = ((currentTime % scene.L) + scene.L) % scene.L;
+        updateUI();
+    }
+
+    function resetTime() {
+        currentTime = 0;
         updateUI();
     }
 
@@ -851,10 +1000,45 @@
     }
 
     // ---------- Event wiring ----------
+    canvas.addEventListener('mousedown', (e) => {
+        updateMouse(e);
+
+        // Ctrl/Shift + left click starts a pan drag, taking priority over
+        // block editing.
+        if (e.button === 0 && (e.ctrlKey || e.shiftKey)) {
+            panning = true;
+            panStartScreen = { x: mouseX, y: mouseY };
+            panStartOffset = { x: panOffsetX, y: panOffsetY };
+            e.preventDefault();
+            return;
+        }
+
+        if (e.button === 2) {
+            rightMouseDown = true;
+            addBlockAtMouse();
+            e.preventDefault();
+        } else if (e.button === 0) {
+            leftMouseDown = true;
+            removeBlockAtMouse();
+        }
+    });
+
     canvas.addEventListener('mousemove', (e) => {
         updateMouse(e);
+
+        if (panning) {
+            const dx = (mouseX - panStartScreen.x) / blockSize;
+            const dy = (mouseY - panStartScreen.y) / blockSize;
+            panOffsetX = panStartOffset.x - dx;
+            panOffsetY = panStartOffset.y + dy;
+            draw();
+            return;
+        }
+
         if (rightMouseDown) {
             addBlockAtMouse();
+        } else if (leftMouseDown) {
+            removeBlockAtMouse();
         } else {
             const hit = hitTestLogical();
             if (hit) {
@@ -863,37 +1047,47 @@
                 updateUI();
             } else {
                 hoveredSegmentId = null;
-                // keep previous selection
             }
-        }
-    });
-
-    canvas.addEventListener('mousedown', (e) => {
-        if (e.button === 2) {
-            rightMouseDown = true;
-            updateMouse(e);
-            addBlockAtMouse();
-            e.preventDefault();
-        } else if (e.button === 0) {
-            updateMouse(e);
-            removeBlockAtMouse();
         }
     });
 
     canvas.addEventListener('mouseup', (e) => {
         if (e.button === 2) rightMouseDown = false;
+        if (e.button === 0) leftMouseDown = false;
+        panning = false;
     });
 
     canvas.addEventListener('mouseleave', () => {
         rightMouseDown = false;
+        leftMouseDown = false;
+        panning = false;
     });
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        updateMouse(e);
+
+        const camY = getCameraY();
+        const worldXBefore = screenToWorldX(mouseX);
+        const worldYBefore = screenToWorldY(mouseY, camY);
+
+        const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        zoomScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomScale * zoomFactor));
+        blockSize = baseBlockSize * zoomScale;
+
+        // Keep the point under the cursor stationary while zooming.
+        panOffsetX = worldXBefore - (mouseX - originX) / blockSize;
+        panOffsetY = (worldYBefore - camY) - (originY - mouseY) / blockSize;
+
+        draw();
+    }, { passive: false });
+
     // UI buttons
     document.getElementById('step-2').addEventListener('click', () => stepTime(-2));
     document.getElementById('step-1').addEventListener('click', () => stepTime(-1));
-    document.getElementById('reset').addEventListener('click', () => stepTime(0));
+    document.getElementById('reset').addEventListener('click', resetTime);
     document.getElementById('step+1').addEventListener('click', () => stepTime(1));
     document.getElementById('step+2').addEventListener('click', () => stepTime(2));
     document.getElementById('play').addEventListener('click', togglePlay);
@@ -901,6 +1095,13 @@
     document.getElementById('applyTiming').addEventListener('click', applyTiming);
     document.getElementById('export').addEventListener('click', exportJSON);
     document.getElementById('import').addEventListener('click', importJSON);
+
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    speedSlider.addEventListener('input', () => {
+        playSpeed = parseFloat(speedSlider.value);
+        speedValue.textContent = playSpeed.toFixed(1) + ' rt/s';
+    });
 
     document.querySelectorAll('.colour-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -922,6 +1123,8 @@
     function init() {
         document.getElementById('L').value = scene.L;
         document.getElementById('B').value = scene.B;
+        speedSlider.value = playSpeed;
+        speedValue.textContent = playSpeed.toFixed(1) + ' rt/s';
         selectedSegmentId = scene.segments.length ? scene.segments[0].id : null;
         resizeCanvas();
         updateUI();
