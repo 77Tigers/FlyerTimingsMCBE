@@ -139,6 +139,48 @@
             font-variant-numeric: tabular-nums;
         }
 
+        #setup-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1e1e2f;
+        }
+
+        #setup-card {
+            width: min(440px, calc(100vw - 32px));
+            background: #2e2e42;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+        }
+
+        #setup-card h1 {
+            margin-bottom: 18px;
+            font-size: 24px;
+            font-weight: 500;
+        }
+
+        #setup-card .field {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        #setup-card .field input {
+            width: 110px;
+        }
+
+        #createFlyer {
+            width: 100%;
+            margin-top: 8px;
+            padding: 9px 12px;
+        }
+
         /* Selected-segment bar: pinned to the bottom of the whole screen,
            hidden entirely when nothing is selected. */
         #selected-panel {
@@ -183,6 +225,22 @@
     </style>
 </head>
 <body>
+<div id="setup-screen">
+    <div id="setup-card">
+        <h1>Create Flyer</h1>
+        <div class="field">
+            <label for="setupL">Cycle length L</label>
+            <input id="setupL" type="number" min="2" step="1" value="8">
+        </div>
+        <div class="field">
+            <label for="setupB">Number of moves B</label>
+            <input id="setupB" type="number" min="0" step="1" value="2">
+        </div>
+        <div id="setup-status" style="min-height:20px; font-size:13px; color:#f88; margin-bottom:8px;"></div>
+        <button id="createFlyer">Create flyer</button>
+    </div>
+</div>
+
 <div id="app">
     <div id="canvas-container">
         <canvas id="canvas"></canvas>
@@ -197,7 +255,6 @@
                 <label>B: <input id="B" type="number" min="0" step="1"></label>
                 <button id="applyMeta">Apply</button>
             </div>
-            <div class="row time-display" id="time-display">t = 0.0</div>
         </div>
 
         <div class="panel">
@@ -205,11 +262,12 @@
             <div class="row">
                 <button id="step-2">-2 rt</button>
                 <button id="step-1">-1 rt</button>
-                <button id="reset">Start</button>
+                <button id="reset">Reset</button>
                 <button id="step+1">+1 rt</button>
                 <button id="step+2">+2 rt</button>
                 <button id="play">Play</button>
             </div>
+            <div class="row time-display" id="time-display" style="margin-top: 8px;">t = 0.0 / 8 rt</div>
             <div class="row" style="margin-top: 8px;">
                 <label style="flex:1; margin-bottom:0;">Speed
                     <input id="speedSlider" type="range" min="2" max="20" step="0.5" value="2">
@@ -221,6 +279,7 @@
         <div class="panel">
             <h3>Segments</h3>
             <div id="segments-list"></div>
+            <button id="newSegment" style="width:100%; margin-top:8px;">New segment</button>
         </div>
 
         <div class="panel">
@@ -262,11 +321,13 @@
         blue: '#4a8fd4'
     };
 
-    // ---------- Default scene ----------
-    function defaultScene() {
-        const L = 8;
-        const B = 2;
-        const movement = [1, 2, 0, 0, 1, 2, 0, 0];
+    // ---------- Flyer generation ----------
+    function makeMovement(L, B) {
+        return [...Array(B)].flatMap(() => [1, 2]).concat(Array(L - 2 * B).fill(0));
+    }
+
+    function createFlyerScene(L, B) {
+        const movement = makeMovement(L, B);
         return {
             L,
             B,
@@ -291,9 +352,13 @@
     }
 
     // ---------- State ----------
-    let scene = defaultScene();
-    let currentTime = 0;
+    let scene = createFlyerScene(8, 2);
+    let logicalTime = 0;
+    let visualTime = 0;
     let playing = false;
+    let pauseAtNextLogical = false;
+    let transitionActive = false;
+    let transitionTarget = 0;
     let playSpeed = 2; // rt per second
 
     let selectedSegmentId = 1;
@@ -301,6 +366,7 @@
     let conflictSegments = new Set();
     let conflictUntil = 0;
 
+    // Mouse / interaction state
     let mouseX = 0;
     let mouseY = 0;
     let rightMouseDown = false;
@@ -313,6 +379,11 @@
     let panStartOffset = { x: 0, y: 0 };
     let panOffsetX = 0;
     let panOffsetY = 0;
+    let draggingSegmentId = null;
+    let dragStartScreen = { x: 0, y: 0 };
+    let dragStartScene = null;
+    let dragLastDx = 0;
+    let dragLastDy = 0;
     let zoomScale = 1;
     const MIN_ZOOM = 0.2;
     const MAX_ZOOM = 6;
@@ -349,7 +420,7 @@
         return 0;
     }
 
-    // Visual world offset for a segment at continuous time, before camera subtraction.
+    // Visual world offset for a segment at continuous visual time.
     function getVisualOffset(seg, time) {
         const L = scene.L;
         const t = ((time % L) + L) % L;
@@ -371,6 +442,29 @@
         const vn = nextOffset + visStateValue(nextState);
 
         return vi + (vn - vi) * f;
+    }
+
+    function normaliseTime(t) {
+        return ((t % scene.L) + scene.L) % scene.L;
+    }
+
+    function setLogicalTime(t) {
+        logicalTime = Math.round(t);
+        logicalTime = ((logicalTime % scene.L) + scene.L) % scene.L;
+    }
+
+    function animateToLogical(target) {
+        if (playing) return;
+        setLogicalTime(target);
+        const startTime = visualTime;
+        const startMod = normaliseTime(startTime);
+        const targetMod = logicalTime;
+        let delta = targetMod - startMod;
+        if (delta > scene.L / 2) delta -= scene.L;
+        if (delta < -scene.L / 2) delta += scene.L;
+        transitionTarget = startTime + delta;
+        transitionActive = Math.abs(delta) > 0.000001;
+        if (!transitionActive) visualTime = transitionTarget;
     }
 
     // ---------- Validation ----------
@@ -519,7 +613,7 @@
 
     // ---------- Drawing ----------
     function getCameraY() {
-        return scene.B * currentTime / scene.L;
+        return scene.B * normaliseTime(visualTime) / scene.L;
     }
 
     function drawGrid(camY) {
@@ -615,7 +709,7 @@
 
         // Anchor point sits just above the segment's bounding centre.
         const anchorX = worldToScreenX(avgX + 0.5);
-        const anchorY = worldToScreenY(avgY + 1, camY) - 14;
+        const anchorY = worldToScreenY(avgY + 0.5, camY) - 14;
 
         ctx.font = '14px system-ui, sans-serif';
         const metrics = ctx.measureText(seg.name);
@@ -635,7 +729,7 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const L = scene.L;
         const B = scene.B;
-        const t = ((currentTime % L) + L) % L;
+        const t = ((visualTime % L) + L) % L;
         const camY = B * t / L;
 
         drawGrid(camY);
@@ -670,7 +764,7 @@
     function hitTestLogical() {
         const camY = getCameraY();
         for (const seg of scene.segments) {
-            const offset = getSegmentOffset(seg, currentTime);
+            const offset = getSegmentOffset(seg, logicalTime);
             for (const b of seg.blocks) {
                 const worldX = b.x;
                 const worldY = b.y + offset;
@@ -691,7 +785,7 @@
         if (!seg) return;
 
         const cell = getGridCellFromMouse();
-        const offset = getSegmentOffset(seg, currentTime);
+        const offset = getSegmentOffset(seg, logicalTime);
         const startPos = { x: cell.x, y: cell.y - offset };
 
         // Right-clicking on an existing segment does nothing.
@@ -701,7 +795,7 @@
         }
         // Also check current logical occupancy.
         for (const s of scene.segments) {
-            const off = getSegmentOffset(s, currentTime);
+            const off = getSegmentOffset(s, logicalTime);
             if (s.blocks.some(b => b.x === cell.x && b.y + off === cell.y)) return;
         }
 
@@ -721,13 +815,107 @@
         }
     }
 
+    function translateSegmentInScene(candidateScene, segmentId, dx, dy) {
+        const seg = candidateScene.segments.find(s => s.id === segmentId);
+        if (!seg) return false;
+        for (const block of seg.blocks) {
+            block.x += dx;
+            block.y += dy;
+        }
+        return true;
+    }
+
+    function tryDragSegment(dx, dy) {
+        if (draggingSegmentId === null || !dragStartScene) return false;
+
+        const exactScene = cloneScene(dragStartScene);
+        if (!translateSegmentInScene(exactScene, draggingSegmentId, dx, dy)) return false;
+        let result = validateScene(exactScene);
+        if (result.valid) {
+            scene = exactScene;
+            clearConflicts();
+            dragLastDx = dx;
+            dragLastDy = dy;
+            updateUI();
+            return true;
+        }
+
+        // If the requested displacement is diagonal, try the horizontal
+        // component first, then the vertical component. A direction is
+        // diagonal precisely when both snapped grid components are non-zero.
+        if (dx !== 0 && dy !== 0) {
+            const horizontalScene = cloneScene(dragStartScene);
+            translateSegmentInScene(horizontalScene, draggingSegmentId, dx, 0);
+            result = validateScene(horizontalScene);
+            if (result.valid) {
+                scene = horizontalScene;
+                clearConflicts();
+                dragLastDx = dx;
+                dragLastDy = 0;
+                updateUI();
+                return true;
+            }
+
+            const verticalScene = cloneScene(dragStartScene);
+            translateSegmentInScene(verticalScene, draggingSegmentId, 0, dy);
+            result = validateScene(verticalScene);
+            if (result.valid) {
+                scene = verticalScene;
+                clearConflicts();
+                dragLastDx = 0;
+                dragLastDy = dy;
+                updateUI();
+                return true;
+            }
+        }
+
+        // Keep the last valid position. Conflicts are deliberately not
+        // committed to the scene; the user gets feedback instead.
+        if (result && !result.valid) {
+            setConflicts(result.conflicts);
+        }
+        return false;
+    }
+
+    function startSegmentDrag() {
+        const hit = hitTestLogical();
+        if (!hit) return false;
+        const seg = scene.segments.find(s => s.id === hit);
+        if (!seg || seg.blocks.length === 0) return false;
+
+        selectSegment(hit);
+        draggingSegmentId = hit;
+        dragStartScreen = { x: mouseX, y: mouseY };
+        dragStartScene = cloneScene(scene);
+        dragLastDx = 0;
+        dragLastDy = 0;
+        return true;
+    }
+
+    function updateSegmentDrag() {
+        if (draggingSegmentId === null || !dragStartScene) return;
+
+        const dx = Math.round((mouseX - dragStartScreen.x) / blockSize);
+        const dy = -Math.round((mouseY - dragStartScreen.y) / blockSize);
+
+        if (dx === dragLastDx && dy === dragLastDy) return;
+        tryDragSegment(dx, dy);
+    }
+
+    function endSegmentDrag() {
+        draggingSegmentId = null;
+        dragStartScene = null;
+        dragLastDx = 0;
+        dragLastDy = 0;
+    }
+
     function removeBlockAtMouse() {
         if (!selectedSegmentId) return;
         const seg = scene.segments.find(s => s.id === selectedSegmentId);
         if (!seg) return;
 
         const cell = getGridCellFromMouse();
-        const offset = getSegmentOffset(seg, currentTime);
+        const offset = getSegmentOffset(seg, logicalTime);
         const idx = seg.blocks.findIndex(b => b.x === cell.x && b.y + offset === cell.y);
         if (idx === -1) return;
 
@@ -764,6 +952,64 @@
             showStatus('Colour change invalid: ' + result.errors[0]);
             updateUI();
         }
+    }
+
+    // ---------- Segment lifecycle ----------
+    function removeEmptyUnselectedSegment(previousId) {
+        const seg = scene.segments.find(s => s.id === previousId);
+        if (seg && seg.blocks.length === 0) {
+            scene.segments = scene.segments.filter(s => s.id !== previousId);
+        }
+    }
+
+    function selectSegment(id) {
+        if (selectedSegmentId === id) return;
+        if (selectedSegmentId !== null) {
+            removeEmptyUnselectedSegment(selectedSegmentId);
+        }
+        selectedSegmentId = id;
+        updateUI();
+    }
+
+    function createNewSegment(selectIt = true) {
+        if (selectedSegmentId !== null) {
+            removeEmptyUnselectedSegment(selectedSegmentId);
+        }
+
+        const oldScene = cloneScene(scene);
+        const id = scene.nextId++;
+        scene.segments.push({
+            id,
+            colour: 'slime',
+            name: '',
+            blocks: [],
+            // A newly created segment must itself satisfy every movement
+            // invariant before the user edits it.
+            movement: makeMovement(scene.L, scene.B)
+        });
+
+        const result = validateScene(scene);
+        if (!result.valid) {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            showStatus('Could not create a valid new segment: ' + result.errors[0]);
+            updateUI();
+            return;
+        }
+
+        if (selectIt) {
+            selectedSegmentId = id;
+        }
+        clearConflicts();
+        updateUI();
+    }
+
+    function deselectAndCreateBlank() {
+        if (selectedSegmentId !== null) {
+            removeEmptyUnselectedSegment(selectedSegmentId);
+        }
+        selectedSegmentId = null;
+        createNewSegment(true);
     }
 
     // ---------- Timings ----------
@@ -815,7 +1061,7 @@
         }
         if (unfolded.length !== scene.L) {
             setConflicts([seg.id]);
-            currentTime = 0;
+            logicalTime = 0;
             showStatus(`Timing length after unfolding is ${unfolded.length}, but L is ${scene.L}.`);
             updateUI();
             return;
@@ -827,24 +1073,100 @@
 
         if (result.valid) {
             clearConflicts();
-            currentTime = 0;
+            logicalTime = 0;
             showStatus('Timings updated.', false);
             updateUI();
         } else {
             scene = oldScene;
             setConflicts(result.conflicts);
-            currentTime = 0;
+            logicalTime = 0;
             showStatus('Timing change invalid: ' + result.errors[0]);
             updateUI();
         }
     }
 
     // ---------- Meta ----------
+    function findUniformPairStarts(movements, wantValue) {
+        const L = movements[0]?.length ?? 0;
+        const starts = [];
+        for (let i = 0; i < L; i++) {
+            const j = (i + 1) % L;
+            if (movements.every(m => m[i] === wantValue && m[j] === wantValue)) {
+                starts.push(i);
+            }
+        }
+        return starts;
+    }
+
+    function chooseDisjointPairStarts(starts, needed, L) {
+        const chosen = [];
+        const used = new Set();
+        for (const i of starts) {
+            const j = (i + 1) % L;
+            if (used.has(i) || used.has(j)) continue;
+            chosen.push(i);
+            used.add(i);
+            used.add(j);
+            if (chosen.length === needed) break;
+        }
+        return chosen;
+    }
+
+    function changeBInPlace(targetB) {
+        if (targetB === scene.B) return true;
+        if (2 * targetB > scene.L) return false;
+
+        const diff = targetB - scene.B;
+        const movements = scene.segments.map(s => s.movement);
+        const want = diff > 0 ? 0 : 1;
+        const starts = findUniformPairStarts(movements, want);
+        const chosen = chooseDisjointPairStarts(starts, Math.abs(diff), scene.L);
+
+        if (chosen.length !== Math.abs(diff)) return false;
+
+        for (const start of chosen) {
+            const j = (start + 1) % scene.L;
+            for (const movement of movements) {
+                if (diff > 0) {
+                    movement[start] = 1;
+                    movement[j] = 2;
+                } else {
+                    movement[start] = 0;
+                    movement[j] = 0;
+                }
+            }
+        }
+        scene.B = targetB;
+        return true;
+    }
+
+    function removeZeroColumns(newL) {
+        while (scene.L > newL) {
+            const removable = [];
+            for (let i = 0; i < scene.L; i++) {
+                if (scene.segments.every(s => s.movement[i] === 0)) removable.push(i);
+            }
+            if (removable.length === 0) return false;
+
+            const index = removable[removable.length - 1];
+            for (const seg of scene.segments) seg.movement.splice(index, 1);
+            scene.L--;
+        }
+        return true;
+    }
+
+    function applyMetaFallback(newL, newB) {
+        if (2 * newB > newL) return false;
+        scene.L = newL;
+        scene.B = newB;
+        const movement = makeMovement(newL, newB);
+        for (const seg of scene.segments) seg.movement = movement.slice();
+        return true;
+    }
+
     function applyMeta() {
-        const LInput = document.getElementById('L');
-        const BInput = document.getElementById('B');
-        const newL = parseInt(LInput.value, 10);
-        const newB = parseInt(BInput.value, 10);
+        const newL = parseInt(document.getElementById('L').value, 10);
+        const newB = parseInt(document.getElementById('B').value, 10);
 
         if (!Number.isInteger(newL) || newL < 2) {
             showStatus('L must be an integer >= 2.');
@@ -854,32 +1176,82 @@
             showStatus('B must be a non-negative integer.');
             return;
         }
+        if (2 * newB > newL) {
+            showStatus(`2B <= L is required; requested B=${newB}, L=${newL}.`);
+            return;
+        }
+        if (newL === scene.L && newB === scene.B) return;
 
         const oldScene = cloneScene(scene);
-        scene.L = newL;
-        scene.B = newB;
+        const oldL = scene.L;
+        let success = true;
 
-        for (const seg of scene.segments) {
-            if (seg.movement.length > newL) {
-                seg.movement = seg.movement.slice(0, newL);
-            } else if (seg.movement.length < newL) {
-                while (seg.movement.length < newL) seg.movement.push(0);
+        if (newL > oldL) {
+            // First pad with synchronized zero-time columns; this can make a
+            // larger B reachable without ever violating the old invariants.
+            while (scene.L < newL) {
+                for (const seg of scene.segments) seg.movement.push(0);
+                scene.L++;
             }
+            if (!changeBInPlace(newB)) success = false;
+        } else {
+            // Adjust B first, then only delete columns that are all zero.
+            if (!changeBInPlace(newB)) success = false;
+            if (success && newL < oldL) success = removeZeroColumns(newL);
         }
 
-        const result = validateScene(scene);
-        if (result.valid) {
-            clearConflicts();
-            currentTime = 0;
-            showStatus('Meta applied.', false);
-            updateUI();
-        } else {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            currentTime = 0;
-            showStatus('Meta change invalid: ' + result.errors[0]);
-            updateUI();
+        // If this careful transformation worked, verify every invariant.
+        if (success) {
+            scene.L = newL;
+            scene.B = newB;
+            const result = validateScene(scene);
+            success = result.valid;
         }
+
+        if (!success) {
+            scene = oldScene;
+            const proceed = confirm(
+                `L=${newL}, B=${newB} cannot be reached without violating the timing invariants using the safe transformation.\\n\\n` +
+                `Reset all segment timings so each segment moves B times at the very start of the cycle and waits for the rest?`
+            );
+            if (!proceed) {
+                document.getElementById('L').value = oldScene.L;
+                document.getElementById('B').value = oldScene.B;
+                showStatus('Meta change cancelled.');
+                return;
+            }
+
+            if (!applyMetaFallback(newL, newB)) {
+                showStatus('Requested L and B are incompatible.');
+                document.getElementById('L').value = oldScene.L;
+                document.getElementById('B').value = oldScene.B;
+                return;
+            }
+
+            const fallbackResult = validateScene(scene);
+            if (!fallbackResult.valid) {
+                scene = oldScene;
+                document.getElementById('L').value = oldScene.L;
+                document.getElementById('B').value = oldScene.B;
+                setConflicts(fallbackResult.conflicts);
+                showStatus('Fallback timing reset would violate invariants; no changes made.');
+                return;
+            }
+            showStatus('Meta applied using fallback timing reset.', false);
+        } else {
+            showStatus('Meta applied.', false);
+        }
+
+        playing = false;
+        pauseAtNextLogical = false;
+        transitionActive = false;
+        document.getElementById('play').textContent = 'Play';
+        setLogicalTime(0);
+        visualTime = 0;
+        clearConflicts();
+        document.getElementById('L').value = scene.L;
+        document.getElementById('B').value = scene.B;
+        updateUI();
     }
 
     // ---------- Export / Import ----------
@@ -905,7 +1277,12 @@
             }
 
             scene = data;
-            currentTime = 0;
+            logicalTime = 0;
+            visualTime = 0;
+            playing = false;
+            pauseAtNextLogical = false;
+            transitionActive = false;
+            document.getElementById('play').textContent = 'Play';
             clearConflicts();
             if (scene.segments.length > 0) selectedSegmentId = scene.segments[0].id;
             else selectedSegmentId = null;
@@ -921,6 +1298,7 @@
         const list = document.getElementById('segments-list');
         list.innerHTML = '';
         for (const seg of scene.segments) {
+            if (seg.blocks.length === 0) continue;
             const div = document.createElement('div');
             div.className = 'seg-item' + (seg.id === selectedSegmentId ? ' selected' : '');
             const swatch = document.createElement('span');
@@ -931,8 +1309,7 @@
             nameSpan.textContent = seg.name || `Segment ${seg.id}`;
             div.appendChild(nameSpan);
             div.addEventListener('click', () => {
-                selectedSegmentId = seg.id;
-                updateUI();
+                selectSegment(seg.id);
             });
             list.appendChild(div);
         }
@@ -958,7 +1335,7 @@
 
     function updateTimeDisplay() {
         document.getElementById('time-display').textContent =
-            `t = ${currentTime.toFixed(1)} / ${scene.L} rt`;
+            `t = ${logicalTime} / ${scene.L} rt`;
     }
 
     function updateUI() {
@@ -970,30 +1347,93 @@
 
     // ---------- Time stepping / playback ----------
     function stepTime(delta) {
-        currentTime += delta;
-        currentTime = ((currentTime % scene.L) + scene.L) % scene.L;
+        if (playing) return;
+        animateToLogical(logicalTime + delta);
         updateUI();
     }
 
     function resetTime() {
-        currentTime = 0;
+        playing = false;
+        pauseAtNextLogical = false;
+        document.getElementById('play').textContent = 'Play';
+        animateToLogical(0);
         updateUI();
     }
 
     function togglePlay() {
-        playing = !playing;
-        document.getElementById('play').textContent = playing ? 'Pause' : 'Play';
+        if (!playing) {
+            pauseAtNextLogical = false;
+            transitionActive = false;
+            visualTime = logicalTime;
+            playing = true;
+            document.getElementById('play').textContent = 'Pause';
+        } else {
+            // Do not freeze mid-cycle. Finish the current visual interval,
+            // then stop exactly at the next logical integer.
+            pauseAtNextLogical = true;
+        }
+        updateUI();
+    }
+
+    function handleKeyboard(e) {
+        if (e.target.matches('input, textarea, select')) return;
+
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlay();
+            return;
+        }
+
+        if (e.key.toLowerCase() === 'n') {
+            e.preventDefault();
+            createNewSegment(true);
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            deselectAndCreateBlank();
+        }
     }
 
     // ---------- Animation loop ----------
     let lastTime = performance.now();
     function animate(now) {
-        if (playing) {
-            const dt = (now - lastTime) / 1000;
-            currentTime += dt * playSpeed;
-            currentTime = ((currentTime % scene.L) + scene.L) % scene.L;
-            updateTimeDisplay();
+        const dt = (now - lastTime) / 1000;
+
+        if (!playing && transitionActive) {
+            const distance = transitionTarget - visualTime;
+            const transitionSpeed = Math.max(4, playSpeed * 4);
+            const move = transitionSpeed * dt;
+            if (Math.abs(distance) <= move) {
+                visualTime = transitionTarget;
+                transitionActive = false;
+            } else {
+                visualTime += Math.sign(distance) * move;
+            }
         }
+
+        if (playing) {
+            const oldVisual = visualTime;
+            visualTime = normaliseTime(visualTime + dt * playSpeed);
+
+            if (pauseAtNextLogical) {
+                const oldFloor = Math.floor(oldVisual + 1e-9);
+                const newFloor = Math.floor(visualTime + 1e-9);
+                if (newFloor !== oldFloor || Math.abs(visualTime - Math.round(visualTime)) < 1e-6) {
+                    setLogicalTime(Math.round(visualTime));
+                    visualTime = logicalTime;
+                    playing = false;
+                    pauseAtNextLogical = false;
+                    document.getElementById('play').textContent = 'Play';
+                    updateTimeDisplay();
+                }
+            } else {
+                setLogicalTime(Math.floor(visualTime + 1e-9));
+                updateTimeDisplay();
+            }
+        }
+
         lastTime = now;
         draw();
         requestAnimationFrame(animate);
@@ -1003,8 +1443,15 @@
     canvas.addEventListener('mousedown', (e) => {
         updateMouse(e);
 
-        // Ctrl/Shift + left click starts a pan drag, taking priority over
-        // block editing.
+        // Ctrl + left-drag moves a segment. Shift + left-drag pans.
+        // Ctrl + Shift + left-drag retains the old pan behaviour.
+        if (e.button === 0 && e.ctrlKey && !e.shiftKey) {
+            if (startSegmentDrag()) {
+                e.preventDefault();
+                return;
+            }
+        }
+
         if (e.button === 0 && (e.ctrlKey || e.shiftKey)) {
             panning = true;
             panStartScreen = { x: mouseX, y: mouseY };
@@ -1025,6 +1472,11 @@
 
     canvas.addEventListener('mousemove', (e) => {
         updateMouse(e);
+
+        if (draggingSegmentId !== null) {
+            updateSegmentDrag();
+            return;
+        }
 
         if (panning) {
             const dx = (mouseX - panStartScreen.x) / blockSize;
@@ -1053,7 +1505,10 @@
 
     canvas.addEventListener('mouseup', (e) => {
         if (e.button === 2) rightMouseDown = false;
-        if (e.button === 0) leftMouseDown = false;
+        if (e.button === 0) {
+            leftMouseDown = false;
+            endSegmentDrag();
+        }
         panning = false;
     });
 
@@ -1061,6 +1516,7 @@
         rightMouseDown = false;
         leftMouseDown = false;
         panning = false;
+        endSegmentDrag();
     });
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1095,6 +1551,8 @@
     document.getElementById('applyTiming').addEventListener('click', applyTiming);
     document.getElementById('export').addEventListener('click', exportJSON);
     document.getElementById('import').addEventListener('click', importJSON);
+    document.getElementById('newSegment').addEventListener('click', () => createNewSegment(true));
+    window.addEventListener('keydown', handleKeyboard);
 
     const speedSlider = document.getElementById('speedSlider');
     const speedValue = document.getElementById('speedValue');
@@ -1120,19 +1578,45 @@
     });
 
     // ---------- Initialisation ----------
-    function init() {
+    function startEditor(L, B) {
+        scene = createFlyerScene(L, B);
+        logicalTime = 0;
+        visualTime = 0;
+        playing = false;
+        pauseAtNextLogical = false;
+        transitionActive = false;
+        transitionTarget = 0;
+        selectedSegmentId = scene.segments.length ? scene.segments[0].id : null;
         document.getElementById('L').value = scene.L;
         document.getElementById('B').value = scene.B;
-        speedSlider.value = playSpeed;
-        speedValue.textContent = playSpeed.toFixed(1) + ' rt/s';
-        selectedSegmentId = scene.segments.length ? scene.segments[0].id : null;
+        document.getElementById('setup-screen').style.display = 'none';
         resizeCanvas();
         updateUI();
         exportJSON();
-        requestAnimationFrame(animate);
     }
 
-    init();
+    document.getElementById('createFlyer').addEventListener('click', () => {
+        const L = parseInt(document.getElementById('setupL').value, 10);
+        const B = parseInt(document.getElementById('setupB').value, 10);
+        const setupStatus = document.getElementById('setup-status');
+
+        if (!Number.isInteger(L) || L < 2) {
+            setupStatus.textContent = 'L must be an integer >= 2.';
+            return;
+        }
+        if (!Number.isInteger(B) || B < 0 || 2 * B > L) {
+            setupStatus.textContent = 'B must be a non-negative integer with 2B <= L.';
+            return;
+        }
+
+        setupStatus.textContent = '';
+        startEditor(L, B);
+    });
+
+    // Keep the original editor running only after the initial flyer is created.
+    resizeCanvas();
+    requestAnimationFrame(animate);
+
 </script>
 </body>
 </html>
