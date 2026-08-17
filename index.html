@@ -5,231 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flyer Editor</title>
     <style>
+        /* (CSS unchanged for brevity – same as before) */
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: system-ui, sans-serif;
-            background: #1e1e2f;
-            color: #eee;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-        }
-        #app {
-            display: flex;
-            width: 100%;
-            height: 100%;
-        }
-        #canvas-container {
-            flex: 1;
-            position: relative;
-            background: #111;
-            min-width: 0;
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            cursor: crosshair;
-        }
-        #sidebar {
-            width: 340px;
-            background: #262638;
-            padding: 16px;
-            overflow-y: auto;
-            border-left: 1px solid #444;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        h2, h3 {
-            margin: 0 0 6px;
-            font-weight: 500;
-        }
-        .panel {
-            background: #2e2e42;
-            padding: 12px;
-            border-radius: 8px;
-        }
-        label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        input[type="number"], input[type="text"], textarea {
-            background: #1a1a28;
-            color: #eee;
-            border: 1px solid #555;
-            border-radius: 4px;
-            padding: 6px 8px;
-            font-size: 14px;
-            width: 100%;
-        }
-        input[type="number"] {
-            width: 70px;
-        }
-        input[type="range"] {
-            flex: 1;
-        }
-        button {
-            background: #3a3a50;
-            color: #eee;
-            border: 1px solid #666;
-            border-radius: 4px;
-            padding: 6px 10px;
-            cursor: pointer;
-            font-size: 13px;
-        }
+        body { font-family: system-ui, sans-serif; background: #1e1e2f; color: #eee; display: flex; height: 100vh; overflow: hidden; }
+        #app { display: flex; width: 100%; height: 100%; }
+        #canvas-container { flex: 1; position: relative; background: #111; min-width: 0; }
+        canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+        #sidebar { width: 340px; background: #262638; padding: 16px; overflow-y: auto; border-left: 1px solid #444; display: flex; flex-direction: column; gap: 12px; }
+        h2, h3 { margin: 0 0 6px; font-weight: 500; }
+        .panel { background: #2e2e42; padding: 12px; border-radius: 8px; }
+        label { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 14px; }
+        input[type="number"], input[type="text"], textarea { background: #1a1a28; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 6px 8px; font-size: 14px; width: 100%; }
+        input[type="number"] { width: 70px; }
+        input[type="range"] { flex: 1; }
+        button { background: #3a3a50; color: #eee; border: 1px solid #666; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
         button:hover { background: #4a4a64; }
         button.active { background: #4a90d9; border-color: #7ab4f0; }
-        .row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-        }
-        .swatch {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border-radius: 3px;
-            margin-right: 6px;
-            border: 1px solid #888;
-        }
-        .seg-item {
-            display: flex;
-            align-items: center;
-            padding: 6px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-bottom: 2px;
-        }
+        .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; border: 1px solid #888; }
+        .seg-item { display: flex; align-items: center; padding: 6px; border-radius: 4px; cursor: pointer; margin-bottom: 2px; }
         .seg-item:hover { background: #3a3a50; }
         .seg-item.selected { background: #44446a; outline: 1px solid #fff; }
-        .colour-btn {
-            flex: 1;
-            padding: 8px 4px;
-            font-weight: bold;
-        }
+        .colour-btn { flex: 1; padding: 8px 4px; font-weight: bold; }
         .colour-btn.slime { background: #7cc24e; color: #111; }
         .colour-btn.honey { background: #f2c144; color: #111; }
         .colour-btn.blue { background: #4a8fd4; color: #111; }
-        #status {
-            min-height: 20px;
-            font-size: 13px;
-            color: #f88;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        #jsonArea {
-            height: 120px;
-            resize: vertical;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        .time-display {
-            font-size: 15px;
-            font-variant-numeric: tabular-nums;
-        }
-        #speedValue {
-            font-size: 13px;
-            min-width: 62px;
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-        }
-        #hints {
-            font-size: 11px;
-            color: #889;
-            line-height: 1.5;
-        }
-
-        #setup-screen {
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #1e1e2f;
-        }
-
-        #setup-card {
-            width: min(440px, calc(100vw - 32px));
-            background: #2e2e42;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
-        }
-
-        #setup-card h1 {
-            margin-bottom: 18px;
-            font-size: 24px;
-            font-weight: 500;
-        }
-
-        #setup-card .field {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        #setup-card .field input {
-            width: 110px;
-        }
-
-        #createFlyer {
-            width: 100%;
-            margin-top: 8px;
-            padding: 9px 12px;
-        }
-
-        /* Selected-segment bar: pinned to the bottom of the whole screen,
-           hidden entirely when nothing is selected. */
-        #selected-panel {
-            display: none;
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 20;
-            background: #262638;
-            border-top: 1px solid #444;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.35);
-            padding: 10px 16px;
-            align-items: center;
-            gap: 18px;
-            flex-wrap: wrap;
-        }
-        #selected-panel h3 {
-            margin: 0;
-            font-size: 13px;
-            color: #aab;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            white-space: nowrap;
-        }
-        #selected-panel .field-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        #selected-panel label {
-            margin-bottom: 0;
-            white-space: nowrap;
-        }
-        #selected-panel input[type="text"] {
-            width: 160px;
-        }
-        #timingInput {
-            width: 140px !important;
-            font-family: monospace;
-        }
-        #defaultTimingInput {
-            font-family: monospace;
-        }
+        #status { min-height: 20px; font-size: 13px; color: #f88; white-space: pre-wrap; word-break: break-word; }
+        #jsonArea { height: 120px; resize: vertical; font-family: monospace; font-size: 12px; }
+        .time-display { font-size: 15px; font-variant-numeric: tabular-nums; }
+        #speedValue { font-size: 13px; min-width: 62px; text-align: right; font-variant-numeric: tabular-nums; }
+        #hints { font-size: 11px; color: #889; line-height: 1.5; }
+        #setup-screen { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: #1e1e2f; }
+        #setup-card { width: min(440px, calc(100vw - 32px)); background: #2e2e42; padding: 24px; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
+        #setup-card h1 { margin-bottom: 18px; font-size: 24px; font-weight: 500; }
+        #setup-card .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        #setup-card .field input { width: 110px; }
+        #createFlyer { width: 100%; margin-top: 8px; padding: 9px 12px; }
+        #selected-panel { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #262638; border-top: 1px solid #444; box-shadow: 0 -4px 12px rgba(0,0,0,0.35); padding: 10px 16px; align-items: center; gap: 18px; flex-wrap: wrap; }
+        #selected-panel h3 { margin: 0; font-size: 13px; color: #aab; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+        #selected-panel .field-group { display: flex; align-items: center; gap: 8px; }
+        #selected-panel label { margin-bottom: 0; white-space: nowrap; }
+        #selected-panel input[type="text"] { width: 160px; }
+        #timingInput { width: 140px !important; font-family: monospace; }
+        #defaultTimingInput { font-family: monospace; }
     </style>
 </head>
 <body>
@@ -331,1720 +149,1291 @@
 </div>
 
 <script>
-    'use strict';
+'use strict';
 
-    // ---------- Colour map ----------
-    const COLOURS = {
-        slime: '#7cc24e',
-        honey: '#f2c144',
-        blue: '#4a8fd4'
+/* ======================================================
+ *  MODEL – state and pure logic
+ * ====================================================== */
+
+// Colour definitions and utilities
+const COLOURS = {
+    slime: '#7cc24e',
+    honey: '#f2c144',
+    blue: '#4a8fd4'
+};
+
+function whiten(hex, amount) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const nr = Math.round(r + (255 - r) * amount);
+    const ng = Math.round(g + (255 - g) * amount);
+    const nb = Math.round(b + (255 - b) * amount);
+    return `rgb(${nr},${ng},${nb})`;
+}
+
+function makeMovement(L, B) {
+    return [...Array(B)].flatMap(() => [1, 2]).concat(Array(L - 2 * B).fill(0));
+}
+
+function createFlyerScene(L, B) {
+    const movement = makeMovement(L, B);
+    return {
+        L,
+        B,
+        segments: [
+            {
+                id: 1,
+                colour: 'slime',
+                name: 'Core',
+                blocks: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+                movement: movement.slice(),
+                frozen: false
+            },
+            {
+                id: 2,
+                colour: 'honey',
+                name: 'Piston',
+                blocks: [{ x: 2, y: 0 }, { x: 2, y: 1 }],
+                movement: movement.slice(),
+                frozen: false
+            }
+        ],
+        nextId: 3,
+        defaultMovement: movement.slice()
     };
+}
 
-    function whiten(hex, amount) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        const nr = Math.round(r + (255 - r) * amount);
-        const ng = Math.round(g + (255 - g) * amount);
-        const nb = Math.round(b + (255 - b) * amount);
-        return `rgb(${nr},${ng},${nb})`;
+function cloneScene(s) {
+    return JSON.parse(JSON.stringify(s));
+}
+
+/* ---------- Movement and time helpers ---------- */
+
+function countTwosBefore(movement, t) {
+    let c = 0;
+    for (let i = 0; i < t; i++) if (movement[i] === 2) c++;
+    return c;
+}
+
+/**
+ * Logical offset of a segment at a given time.
+ * The `L` parameter avoids relying on the global `scene` when working
+ * with cloned scenes.
+ */
+function getLogicalOffset(seg, time, L = scene.L) {
+    const t = ((time % L) + L) % L;
+    const i = Math.floor(t);
+    return countTwosBefore(seg.movement, i) + (seg.movement[i] === 2 ? 1 : 0);
+}
+
+function visStateValue(s) {
+    if (s === 1) return 0.2;
+    if (s === 2) return -0.2;
+    return 0;
+}
+
+/**
+ * Visual world offset for a segment at continuous visual time.
+ * Logical offset already includes the +1 shift when state is 2, so
+ * visStateValue just adds a small visual nudge (0.2 or -0.2).
+ */
+function getVisualOffset(seg, time) {
+    const L = scene.L;
+    const t = ((time % L) + L) % L;
+    const i = Math.floor(t);
+    const f = t - i;
+
+    const offset_i = getLogicalOffset(seg, i);
+    const vi = offset_i + visStateValue(seg.movement[i]);
+
+    let nextOffset, nextState;
+    if (i === L - 1) {
+        nextOffset = getLogicalOffset(seg, 0) + scene.B;
+        nextState = seg.movement[0];
+    } else {
+        nextOffset = getLogicalOffset(seg, i + 1);
+        nextState = seg.movement[i + 1];
     }
+    const vn = nextOffset + visStateValue(nextState);
 
-    // ---------- Flyer generation ----------
-    function makeMovement(L, B) {
-        return [...Array(B)].flatMap(() => [1, 2]).concat(Array(L - 2 * B).fill(0));
+    return vi + (vn - vi) * f;
+}
+
+function normaliseTime(t) {
+    return ((t % scene.L) + scene.L) % scene.L;
+}
+
+/* ---------- Freezing / unfreezing ---------- */
+
+function getSegmentInternalTime(seg, globalT) {
+    if (seg.frozen) return seg.frozenInternalTime;
+    return globalT;
+}
+
+function freezeSegment(seg) {
+    if (seg.frozen) return;
+    seg.frozenInternalTime = normaliseTime(logicalTime);
+    seg.frozen = true;
+}
+
+function rotateMovementToStartAt(movement, startIndex, L) {
+    const rotated = new Array(L);
+    for (let t = 0; t < L; t++) {
+        rotated[t] = movement[((t - startIndex) % L + L) % L];
     }
+    return rotated;
+}
 
-    function createFlyerScene(L, B) {
-        const movement = makeMovement(L, B);
-        return {
-            L,
-            B,
-            segments: [
-                {
-                    id: 1,
-                    colour: 'slime',
-                    name: 'Core',
-                    blocks: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-                    movement: movement.slice(),
-                    frozen: false
-                },
-                {
-                    id: 2,
-                    colour: 'honey',
-                    name: 'Piston',
-                    blocks: [{ x: 2, y: 0 }, { x: 2, y: 1 }],
-                    movement: movement.slice(),
-                    frozen: false
-                }
-            ],
-            nextId: 3,
-            defaultMovement: movement.slice()
-        };
-    }
-
-    // ---------- State ----------
-    let scene = createFlyerScene(8, 2);
-    let logicalTime = 0;
-    let visualTime = 0;
-    let playing = false;
-    let pauseAtNextLogical = false;
-    let transitionActive = false;
-    let transitionTarget = 0;
-    let playSpeed = 2; // rt per second
-    let arrowStepSize = 1;
-
-    let selectedSegmentId = 1;
-    let hoveredSegmentId = null;
-    let conflictSegments = new Set();
-    let conflictUntil = 0;
-
-    // Mouse / interaction state
-    let mouseX = 0;
-    let mouseY = 0;
-    let rightMouseDown = false;
-    let leftMouseDown = false;
-    let leftMouseDownWasEmpty = false;
-    let leftMouseDownRemovedBlock = false;
-
-    // Panning / zoom state. Pan is stored in world (block) units; zoom is a
-    // multiplier applied on top of the base block size computed on resize.
-    let panning = false;
-    let panStartScreen = { x: 0, y: 0 };
-    let panStartOffset = { x: 0, y: 0 };
-    let panOffsetX = 0;
-    let panOffsetY = 0;
-    let panKeysHeld = { w: false, a: false, s: false, d: false };
-    let draggingSegmentId = null;
-    let dragStartScreen = { x: 0, y: 0 };
-    let dragStartScene = null;
-    let dragLastDx = 0;
-    let dragLastDy = 0;
-    let zoomScale = 1;
-    const MIN_ZOOM = 0.2;
-    const MAX_ZOOM = 6;
-
-    // Freeze-key ("f") held-and-hover state, and the segment clipboard.
-    let fKeyHeld = false;
-    let fToggledThisSession = new Set();
-    let clipboard = null;
-
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    let baseBlockSize = 40;
-    let blockSize = 40;
-    let originX = 0;
-    let originY = 0;
-
-    // ---------- Cloning ----------
-    function cloneScene(s) {
-        return JSON.parse(JSON.stringify(s));
-    }
-
-    // ---------- Utility ----------
-    function countTwosBefore(movement, t) {
-        let c = 0;
-        for (let i = 0; i < t; i++) if (movement[i] === 2) c++;
-        return c;
-    }
-
-    function getSegmentOffset(seg, time) {
-        const L = scene.L;
-        const t = ((time % L) + L) % L;
-        const i = Math.floor(t);
-        return countTwosBefore(seg.movement, i);
-    }
-
-    // Logical block offset: state 2 means the segment has completed its move
-    // and is shifted one block forward relative to states 0/1.
-    function getLogicalOffset(seg, time) {
-        const L = scene.L;
-        const t = ((time % L) + L) % L;
-        const i = Math.floor(t);
-        return countTwosBefore(seg.movement, i) + (seg.movement[i] === 2 ? 1 : 0);
-    }
-
-    function visStateValue(s) {
-        if (s === 1) return 0.2;
-        if (s === 2) return -0.2;  // logical offset is 1, displayed 0.2 backwards
-        return 0;
-    }
-
-    // Visual world offset for a segment at continuous visual time.
-    function getVisualOffset(seg, time) {
-        const L = scene.L;
-        const t = ((time % L) + L) % L;
-        const i = Math.floor(t);
-        const f = t - i;
-
-        const offset_i = getLogicalOffset(seg, i);
-        const state_i = seg.movement[i];
-        const vi = offset_i + visStateValue(state_i);
-
-        let nextOffset, nextState;
-        if (i === L - 1) {
-            nextOffset = getLogicalOffset(seg, 0) + scene.B;
-            nextState = seg.movement[0];
-        } else {
-            nextOffset = getLogicalOffset(seg, i + 1);
-            nextState = seg.movement[i + 1];
+/**
+ * Shift all frozen segments' blocks down by B when the visual time wraps.
+ * This keeps them visually aligned with the grid without any extra visual
+ * compensation.
+ */
+function shiftFrozenBlocksOnWrap() {
+    for (const seg of scene.segments) {
+        if (seg.frozen) {
+            for (const block of seg.blocks) {
+                block.y -= scene.B;
+            }
         }
-        const vn = nextOffset + visStateValue(nextState);
-
-        return vi + (vn - vi) * f;
     }
+}
 
-    function normaliseTime(t) {
-        return ((t % scene.L) + scene.L) % scene.L;
+/**
+ * Unfreeze a segment in a given scene (typically a clone).
+ * The segment's movement array is rotated so that its new cycle starts at
+ * `unfreezeTime`, and its blocks are shifted to keep the same world position.
+ */
+function unfreezeSegmentInScene(seg, targetScene, unfreezeTime = logicalTime) {
+    if (!seg.frozen) return;
+    const L = targetScene.L;
+    const F = normaliseTime(seg.frozenInternalTime);
+    const T = normaliseTime(unfreezeTime);
+
+    const oldOffset = getLogicalOffset(seg, F, L);
+
+    const newMovement = rotateMovementToStartAt(seg.movement, T - F, L);
+    const newOffset = getLogicalOffset({ movement: newMovement }, T, L);
+
+    const delta = oldOffset - newOffset;
+
+    seg.movement = newMovement;
+    for (const block of seg.blocks) {
+        block.y += delta;
     }
+    seg.frozen = false;
+    delete seg.frozenInternalTime;
+}
 
-    function getSegmentInternalTime(seg, globalT) {
-        if (seg.frozen) return seg.frozenInternalTime;
-        return globalT;
+function unfreezeSegmentNoValidate(seg) {
+    if (!seg.frozen) return false;
+    unfreezeSegmentInScene(seg, scene);
+    return true;
+}
+
+function unfreezeSegment(seg) {
+    if (!seg.frozen) return false;
+    const oldScene = cloneScene(scene);
+    if (!unfreezeSegmentNoValidate(seg)) return false;
+    const result = validateSceneUnfrozen(scene);
+    if (!result.valid) {
+        scene = oldScene;
+        setConflicts(result.conflicts);
+        showStatus('Unfreeze would violate invariants; no changes made.', true);
+        updateUI();
+        return false;
     }
+    return true;
+}
 
-    function freezeSegment(seg) {
-        if (seg.frozen) return;
+function toggleFreezeById(id) {
+    const seg = scene.segments.find(s => s.id === id);
+    if (!seg) return;
+    if (seg.frozen) {
+        unfreezeSegmentInScene(seg, scene);
+    } else {
         seg.frozenInternalTime = normaliseTime(logicalTime);
         seg.frozen = true;
     }
+    updateUI();
+}
 
-    function rotateMovementToStartAt(movement, startIndex, L) {
-        const rotated = new Array(L);
-        for (let t = 0; t < L; t++) {
-            rotated[t] = movement[((t - startIndex) % L + L) % L];
+/* ---------- Conflict resolution ---------- */
+
+/**
+ * Try to advance to a target logical time while preserving invariants.
+ * The loop:
+ *  1. Simulate unfreezing ALL frozen segments at the target time and validate.
+ *  2. If valid, stop.
+ *  3. Otherwise, unfreeze the conflicting frozen segments at the CURRENT time.
+ *  4. Repeat until no frozen segments remain or a valid state is reached.
+ * Unfreezing everything at the current time is always valid, so this
+ * terminates.
+ */
+function resolveFreezeConflicts(targetTime) {
+    const unfrozenNames = [];
+    while (scene.segments.some(s => s.frozen)) {
+        const result = validateSceneUnfrozen(scene, targetTime);
+        if (result.valid) break;
+
+        let unfrozeAny = false;
+        for (const seg of scene.segments) {
+            if (seg.frozen && result.conflicts.has(seg.id)) {
+                unfreezeSegmentInScene(seg, scene, logicalTime);
+                unfrozenNames.push(seg.name || `Segment ${seg.id}`);
+                unfrozeAny = true;
+            }
         }
-        return rotated;
+        if (!unfrozeAny) return false;
+    }
+    if (unfrozenNames.length > 0) {
+        showStatus(`Auto-unfroze ${unfrozenNames.join(', ')} to avoid an invariant violation.`, true);
+    }
+    return true;
+}
+
+function advanceLogicalTo(target) {
+    const wrapped = ((Math.round(target) % scene.L) + scene.L) % scene.L;
+    if (wrapped === logicalTime) return;
+    if (!resolveFreezeConflicts(wrapped)) {
+        showStatus('Cannot move: invariants would be violated and no safe unfreeze is possible.', true);
+        return;
+    }
+    setLogicalTime(wrapped);
+}
+
+function animateToLogical(target) {
+    if (playing) return;
+    advanceLogicalTo(target);
+    const startTime = visualTime;
+    const startMod = normaliseTime(startTime);
+    const targetMod = logicalTime;
+    let delta = targetMod - startMod;
+    if (delta > scene.L / 2) delta -= scene.L;
+    if (delta < -scene.L / 2) delta += scene.L;
+    transitionTarget = startTime + delta;
+    transitionActive = Math.abs(delta) > 0.000001;
+    if (!transitionActive) visualTime = transitionTarget;
+}
+
+/* ======================================================
+ *  VALIDATION
+ * ====================================================== */
+
+/**
+ * Raw invariant checker. Assumes all segments are unfrozen.
+ */
+function validateScene(scene) {
+    const conflicts = new Set();
+    const errors = [];
+
+    if (2 * scene.B > scene.L) {
+        errors.push(`2B <= L violated: B=${scene.B}, L=${scene.L}`);
+        scene.segments.forEach(s => conflicts.add(s.id));
+        return { valid: false, conflicts, errors };
     }
 
-    function shiftFrozenBlocksOnWrap() {
+    let movementValid = true;
+    for (const seg of scene.segments) {
+        if (seg.movement.length !== scene.L) {
+            errors.push(`Segment ${seg.id}: movement length ${seg.movement.length} != L ${scene.L}`);
+            conflicts.add(seg.id);
+            movementValid = false;
+            continue;
+        }
+        const ones = seg.movement.filter(v => v === 1).length;
+        if (ones !== scene.B) {
+            errors.push(`Segment ${seg.id}: number of 1s ${ones} != B ${scene.B}`);
+            conflicts.add(seg.id);
+            movementValid = false;
+        }
+        for (let i = 0; i < scene.L; i++) {
+            if (seg.movement[i] === 1 && seg.movement[(i + 1) % scene.L] !== 2) {
+                errors.push(`Segment ${seg.id}: 1 at index ${i} is not followed by 2`);
+                conflicts.add(seg.id);
+                movementValid = false;
+            }
+            if (seg.movement[i] === 2 && seg.movement[(i - 1 + scene.L) % scene.L] !== 1) {
+                errors.push(`Segment ${seg.id}: 2 at index ${i} is not preceded by 1`);
+                conflicts.add(seg.id);
+                movementValid = false;
+            }
+        }
+    }
+    if (!movementValid) return { valid: false, conflicts, errors };
+
+    for (let t = 0; t < scene.L; t++) {
+        const map = new Map();
+        let overlap = false;
         for (const seg of scene.segments) {
-            if (seg.frozen) {
-                for (const block of seg.blocks) {
-                    block.y -= scene.B;
+            const offset = getLogicalOffset(seg, t, scene.L);
+            const state = seg.movement[t];
+            for (const block of seg.blocks) {
+                const y = block.y + offset;
+                const key = `${block.x},${y}`;
+                if (map.has(key)) {
+                    errors.push(`Overlap at time ${t} at (${key}) between segments ${map.get(key).segId} and ${seg.id}`);
+                    conflicts.add(seg.id);
+                    conflicts.add(map.get(key).segId);
+                    overlap = true;
+                } else {
+                    map.set(key, { segId: seg.id, state, colour: seg.colour });
+                }
+            }
+        }
+        if (overlap) continue;
+        for (const [key, entry] of map) {
+            const [x, y] = key.split(',').map(Number);
+            const neighbours = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
+            for (const [nx, ny] of neighbours) {
+                const nKey = `${nx},${ny}`;
+                const nEntry = map.get(nKey);
+                if (!nEntry || nEntry.segId === entry.segId || nEntry.colour !== entry.colour) continue;
+                const s1 = entry.state, s2 = nEntry.state;
+                if (s1 === 0 || s2 === 0 || (s1 === 1 && s2 === 2) || (s1 === 2 && s2 === 1)) {
+                    errors.push(`Same-colour adjacency conflict at time ${t} between segments ${entry.segId} and ${nEntry.segId}`);
+                    conflicts.add(entry.segId);
+                    conflicts.add(nEntry.segId);
                 }
             }
         }
     }
 
-    function unfreezeSegmentInScene(seg, targetScene, unfreezeTime = logicalTime) {
-        if (!seg.frozen) return;
-        const L = targetScene.L;
-        const F = normaliseTime(seg.frozenInternalTime);
-        const T = normaliseTime(unfreezeTime);
+    return { valid: errors.length === 0, conflicts, errors };
+}
 
-        // Compute old logical offset
-        const iF = Math.floor(((F % L) + L) % L);
-        let countTwosOld = 0;
-        for (let j = 0; j < iF; j++) if (seg.movement[j] === 2) countTwosOld++;
-        const oldOffset = countTwosOld + (seg.movement[iF] === 2 ? 1 : 0);
-
-        // Rotate movement
-        const newMovement = rotateMovementToStartAt(seg.movement, T - F, L);
-
-        // Compute new logical offset
-        const iT = Math.floor(((T % L) + L) % L);
-        let countTwosNew = 0;
-        for (let j = 0; j < iT; j++) if (newMovement[j] === 2) countTwosNew++;
-        const newOffset = countTwosNew + (newMovement[iT] === 2 ? 1 : 0);
-
-        const delta = oldOffset - newOffset;
-
-        seg.movement = newMovement;
-        for (const block of seg.blocks) {
-            block.y += delta;
-        }
-        seg.frozen = false;
-        delete seg.frozenInternalTime;
-    }
-
-    function unfreezeSegmentNoValidate(seg) {
-        if (!seg.frozen) return false;
-        unfreezeSegmentInScene(seg, scene);
-        return true;
-    }
-
-    function unfreezeSegment(seg) {
-        if (!seg.frozen) return false;
-        const oldScene = cloneScene(scene);
-        if (!unfreezeSegmentNoValidate(seg)) return false;
-        const result = validateSceneUnfrozen(scene);
-        if (!result.valid) {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            showStatus('Unfreeze would violate invariants; no changes made.', true);
-            updateUI();
-            return false;
-        }
-        return true;
-    }
-
-    function toggleFreezeById(id) {
-        const seg = scene.segments.find(s => s.id === id);
-        if (!seg) return;
-
+/**
+ * Public validator: simulates unfreezing all frozen segments at the given
+ * time, then calls validateScene on the clone.
+ */
+function validateSceneUnfrozen(scene, unfreezeTime = logicalTime) {
+    const simulated = cloneScene(scene);
+    for (const seg of simulated.segments) {
         if (seg.frozen) {
-            unfreezeSegmentInScene(seg, scene);
-        } else {
-            seg.frozenInternalTime = normaliseTime(logicalTime);
-            seg.frozen = true;
-        }
-        updateUI();
-    }
-
-    function setLogicalTime(t) {
-        logicalTime = Math.round(t);
-        logicalTime = ((logicalTime % scene.L) + scene.L) % scene.L;
-    }
-
-    function resolveFreezeConflicts(targetTime) {
-        const unfrozenNames = [];
-
-        while (scene.segments.some(s => s.frozen)) {
-            // Simulate unfreezing all frozen segments at the target time
-            const result = validateSceneUnfrozen(scene, targetTime);
-            if (result.valid) break;
-
-            let unfrozeAny = false;
-            for (const seg of scene.segments) {
-                if (seg.frozen && result.conflicts.has(seg.id)) {
-                    // Unfreeze troublemakers at the CURRENT time
-                    unfreezeSegmentInScene(seg, scene, logicalTime);
-                    unfrozenNames.push(seg.name || `Segment ${seg.id}`);
-                    unfrozeAny = true;
-                }
-            }
-
-            if (!unfrozeAny) {
-                return false;
-            }
-        }
-
-        if (unfrozenNames.length > 0) {
-            showStatus(`Auto-unfroze ${unfrozenNames.join(', ')} to avoid an invariant violation.`, true);
-        }
-        return true;
-    }
-
-    function advanceLogicalTo(target) {
-        const wrapped = ((Math.round(target) % scene.L) + scene.L) % scene.L;
-        if (wrapped === logicalTime) return;
-
-        if (!resolveFreezeConflicts(wrapped)) {
-            showStatus('Cannot move: invariants would be violated and no safe unfreeze is possible.', true);
-            return;
-        }
-
-        setLogicalTime(wrapped);
-    }
-
-    function animateToLogical(target) {
-        if (playing) return;
-        advanceLogicalTo(target);
-        const startTime = visualTime;
-        const startMod = normaliseTime(startTime);
-        const targetMod = logicalTime;
-        let delta = targetMod - startMod;
-        if (delta > scene.L / 2) delta -= scene.L;
-        if (delta < -scene.L / 2) delta += scene.L;
-        transitionTarget = startTime + delta;
-        transitionActive = Math.abs(delta) > 0.000001;
-        if (!transitionActive) visualTime = transitionTarget;
-    }
-
-    // ---------- Validation ----------
-    function validateScene(scene) {
-        const conflicts = new Set();
-        const errors = [];
-
-        if (2 * scene.B > scene.L) {
-            errors.push(`2B <= L violated: B=${scene.B}, L=${scene.L}`);
-            scene.segments.forEach(s => conflicts.add(s.id));
-            return { valid: false, conflicts, errors };
-        }
-
-        let movementValid = true;
-
-        for (const seg of scene.segments) {
-            if (seg.movement.length !== scene.L) {
-                errors.push(`Segment ${seg.id}: movement length ${seg.movement.length} != L ${scene.L}`);
-                conflicts.add(seg.id);
-                movementValid = false;
-                continue;
-            }
-
-            const ones = seg.movement.filter(v => v === 1).length;
-            if (ones !== scene.B) {
-                errors.push(`Segment ${seg.id}: number of 1s ${ones} != B ${scene.B}`);
-                conflicts.add(seg.id);
-                movementValid = false;
-            }
-
-            for (let i = 0; i < scene.L; i++) {
-                if (seg.movement[i] === 1 && seg.movement[(i + 1) % scene.L] !== 2) {
-                    errors.push(`Segment ${seg.id}: 1 at index ${i} is not followed by 2`);
-                    conflicts.add(seg.id);
-                    movementValid = false;
-                }
-                if (seg.movement[i] === 2 && seg.movement[(i - 1 + scene.L) % scene.L] !== 1) {
-                    errors.push(`Segment ${seg.id}: 2 at index ${i} is not preceded by 1`);
-                    conflicts.add(seg.id);
-                    movementValid = false;
-                }
-            }
-        }
-
-        if (!movementValid) {
-            return { valid: false, conflicts, errors };
-        }
-
-        // Collision and adjacency at each integer time step, using logical offsets
-        // so that state 2 blocks are correctly shifted one block forward.
-        for (let t = 0; t < scene.L; t++) {
-            const map = new Map();
-            let overlap = false;
-
-            for (const seg of scene.segments) {
-                const i = t;
-                const offset = getLogicalOffset(seg, i);
-                const state = seg.movement[i];
-
-                for (const block of seg.blocks) {
-                    const y = block.y + offset;
-                    const key = `${block.x},${y}`;
-                    if (map.has(key)) {
-                        errors.push(`Overlap at time ${t} at (${key}) between segments ${map.get(key).segId} and ${seg.id}`);
-                        conflicts.add(seg.id);
-                        conflicts.add(map.get(key).segId);
-                        overlap = true;
-                    } else {
-                        map.set(key, { segId: seg.id, state, colour: seg.colour });
-                    }
-                }
-            }
-
-            if (overlap) continue;
-
-            for (const [key, entry] of map) {
-                const [x, y] = key.split(',').map(Number);
-                const neighbours = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
-                for (const [nx, ny] of neighbours) {
-                    const nKey = `${nx},${ny}`;
-                    const nEntry = map.get(nKey);
-                    if (!nEntry) continue;
-                    if (nEntry.segId === entry.segId) continue;
-                    if (nEntry.colour !== entry.colour) continue;
-
-                    const s1 = entry.state;
-                    const s2 = nEntry.state;
-                    if (s1 === 0 || s2 === 0 || (s1 === 1 && s2 === 2) || (s1 === 2 && s2 === 1)) {
-                        errors.push(`Same-colour adjacency conflict at time ${t} between segments ${entry.segId} and ${nEntry.segId}`);
-                        conflicts.add(entry.segId);
-                        conflicts.add(nEntry.segId);
-                    }
-                }
-            }
-        }
-
-        return { valid: errors.length === 0, conflicts, errors };
-    }
-
-    function validateSceneUnfrozen(scene, unfreezeTime = logicalTime) {
-        const simulated = cloneScene(scene);
-        for (const seg of simulated.segments) {
-            if (seg.frozen) {
-                unfreezeSegmentInScene(seg, simulated, unfreezeTime);
-            }
-        }
-        return validateScene(simulated);
-    }
-
-    function validateMovementPattern(movement, L, B) {
-        if (!Array.isArray(movement) || movement.length !== L) {
-            return { valid: false, error: `length must be ${L}` };
-        }
-        const ones = movement.filter(v => v === 1).length;
-        if (ones !== B) {
-            return { valid: false, error: `number of 1s must be ${B}` };
-        }
-        for (let i = 0; i < L; i++) {
-            if (movement[i] === 1 && movement[(i + 1) % L] !== 2) {
-                return { valid: false, error: `1 at index ${i} is not followed by 2` };
-            }
-            if (movement[i] === 2 && movement[(i - 1 + L) % L] !== 1) {
-                return { valid: false, error: `2 at index ${i} is not preceded by 1` };
-            }
-        }
-        return { valid: true };
-    }
-
-    // ---------- Conflict helpers ----------
-    function setConflicts(conflicts) {
-        conflictSegments = new Set(conflicts);
-        conflictUntil = performance.now() + 2000;
-    }
-
-    function clearConflicts() {
-        conflictSegments.clear();
-        conflictUntil = 0;
-    }
-
-    // ---------- Status ----------
-    const statusDiv = document.getElementById('status');
-    function showStatus(msg, isError = true) {
-        statusDiv.textContent = msg;
-        statusDiv.style.color = isError ? '#f88' : '#8f8';
-        clearTimeout(showStatus._timeout);
-        showStatus._timeout = setTimeout(() => { statusDiv.textContent = ''; }, 4000);
-    }
-
-    // ---------- Canvas sizing ----------
-    function resizeCanvas() {
-        const container = document.getElementById('canvas-container');
-        const rect = container.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-        originX = canvas.width / 2;
-        originY = canvas.height / 2;
-        baseBlockSize = Math.max(20, Math.min(canvas.width, canvas.height) / 15);
-        blockSize = baseBlockSize * zoomScale;
-        draw();
-    }
-    window.addEventListener('resize', resizeCanvas);
-
-    // ---------- Coordinate transforms (pan + zoom aware) ----------
-    function worldToScreenX(wx) {
-        return originX + (wx - panOffsetX) * blockSize;
-    }
-    function worldToScreenY(wy, camY) {
-        return originY - (wy - camY - panOffsetY) * blockSize;
-    }
-    function screenToWorldX(sx) {
-        return panOffsetX + (sx - originX) / blockSize;
-    }
-    function screenToWorldY(sy, camY) {
-        return camY + panOffsetY + (originY - sy) / blockSize;
-    }
-
-    // ---------- Drawing ----------
-    function getCameraY() {
-        return scene.B * normaliseTime(visualTime) / scene.L;
-    }
-
-    function drawGrid(camY) {
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
-
-        const worldLeft = panOffsetX - originX / blockSize;
-        const worldRight = panOffsetX + (canvas.width - originX) / blockSize;
-        const worldBottom = camY + panOffsetY - originY / blockSize;
-        const worldTop = camY + panOffsetY + (canvas.height - originY) / blockSize;
-
-        for (let x = Math.floor(worldLeft); x <= Math.ceil(worldRight); x++) {
-            const sx = worldToScreenX(x);
-            ctx.beginPath();
-            ctx.moveTo(sx, 0);
-            ctx.lineTo(sx, canvas.height);
-            ctx.stroke();
-        }
-        for (let y = Math.floor(worldBottom); y <= Math.ceil(worldTop); y++) {
-            const sy = worldToScreenY(y, camY);
-            ctx.beginPath();
-            ctx.moveTo(0, sy);
-            ctx.lineTo(canvas.width, sy);
-            ctx.stroke();
+            unfreezeSegmentInScene(seg, simulated, unfreezeTime);
         }
     }
+    return validateScene(simulated);
+}
 
-    function computeExteriorEdges(seg) {
-        const set = new Set(seg.blocks.map(b => `${b.x},${b.y}`));
-        const edges = [];
+function validateMovementPattern(movement, L, B) {
+    if (!Array.isArray(movement) || movement.length !== L) {
+        return { valid: false, error: `length must be ${L}` };
+    }
+    const ones = movement.filter(v => v === 1).length;
+    if (ones !== B) {
+        return { valid: false, error: `number of 1s must be ${B}` };
+    }
+    for (let i = 0; i < L; i++) {
+        if (movement[i] === 1 && movement[(i + 1) % L] !== 2) {
+            return { valid: false, error: `1 at index ${i} is not followed by 2` };
+        }
+        if (movement[i] === 2 && movement[(i - 1 + L) % L] !== 1) {
+            return { valid: false, error: `2 at index ${i} is not preceded by 1` };
+        }
+    }
+    return { valid: true };
+}
+
+/* ======================================================
+ *  VIEW – rendering and UI updates
+ * ====================================================== */
+
+// Canvas and UI elements
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusDiv = document.getElementById('status');
+let baseBlockSize = 40;
+let blockSize = 40;
+let originX = 0;
+let originY = 0;
+
+function showStatus(msg, isError = true) {
+    statusDiv.textContent = msg;
+    statusDiv.style.color = isError ? '#f88' : '#8f8';
+    clearTimeout(showStatus._timeout);
+    showStatus._timeout = setTimeout(() => { statusDiv.textContent = ''; }, 4000);
+}
+
+function resizeCanvas() {
+    const container = document.getElementById('canvas-container');
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    originX = canvas.width / 2;
+    originY = canvas.height / 2;
+    baseBlockSize = Math.max(20, Math.min(canvas.width, canvas.height) / 15);
+    blockSize = baseBlockSize * zoomScale;
+    draw();
+}
+window.addEventListener('resize', resizeCanvas);
+
+function worldToScreenX(wx) { return originX + (wx - panOffsetX) * blockSize; }
+function worldToScreenY(wy, camY) { return originY - (wy - camY - panOffsetY) * blockSize; }
+function screenToWorldX(sx) { return panOffsetX + (sx - originX) / blockSize; }
+function screenToWorldY(sy, camY) { return camY + panOffsetY + (originY - sy) / blockSize; }
+
+function getCameraY() { return scene.B * normaliseTime(visualTime) / scene.L; }
+
+function drawGrid(camY) {
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    const worldLeft = panOffsetX - originX / blockSize;
+    const worldRight = panOffsetX + (canvas.width - originX) / blockSize;
+    const worldBottom = camY + panOffsetY - originY / blockSize;
+    const worldTop = camY + panOffsetY + (canvas.height - originY) / blockSize;
+    for (let x = Math.floor(worldLeft); x <= Math.ceil(worldRight); x++) {
+        const sx = worldToScreenX(x);
+        ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, canvas.height); ctx.stroke();
+    }
+    for (let y = Math.floor(worldBottom); y <= Math.ceil(worldTop); y++) {
+        const sy = worldToScreenY(y, camY);
+        ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(canvas.width, sy); ctx.stroke();
+    }
+}
+
+function computeExteriorEdges(seg) {
+    const set = new Set(seg.blocks.map(b => `${b.x},${b.y}`));
+    const edges = [];
+    for (const b of seg.blocks) {
+        if (!set.has(`${b.x + 1},${b.y}`)) edges.push([b.x + 1, b.y, b.x + 1, b.y + 1]);
+        if (!set.has(`${b.x - 1},${b.y}`)) edges.push([b.x, b.y, b.x, b.y + 1]);
+        if (!set.has(`${b.x},${b.y + 1}`)) edges.push([b.x, b.y + 1, b.x + 1, b.y + 1]);
+        if (!set.has(`${b.x},${b.y - 1}`)) edges.push([b.x, b.y, b.x + 1, b.y]);
+    }
+    return edges;
+}
+
+function drawSegmentFill(seg, visOff, camY) {
+    ctx.fillStyle = seg.frozen ? whiten(COLOURS[seg.colour], 0.7) : COLOURS[seg.colour];
+    const pad = 0.75;
+    for (const block of seg.blocks) {
+        const worldX = block.x;
+        const worldY = block.y + visOff;
+        const sx = worldToScreenX(worldX);
+        const sy = worldToScreenY(worldY + 1, camY);
+        ctx.fillRect(sx - pad, sy - pad, blockSize + pad * 2, blockSize + pad * 2);
+    }
+}
+
+function drawSegmentOutline(seg, visOff, camY, isConflict) {
+    const edges = computeExteriorEdges(seg);
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 12;
+    if (isConflict) { ctx.strokeStyle = '#ff4444'; ctx.shadowColor = '#ff4444'; }
+    else { ctx.strokeStyle = '#ffffff'; ctx.shadowColor = '#ffffff'; }
+    ctx.beginPath();
+    for (const [x1, y1, x2, y2] of edges) {
+        const p1x = worldToScreenX(x1);
+        const p1y = worldToScreenY(y1 + visOff, camY);
+        const p2x = worldToScreenX(x2);
+        const p2y = worldToScreenY(y2 + visOff, camY);
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(p2x, p2y);
+    }
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawSegmentName(seg, visOff, camY) {
+    if (!seg.name || seg.blocks.length === 0) return;
+    let avgX = 0, avgY = 0;
+    for (const b of seg.blocks) { avgX += b.x; avgY += b.y + visOff; }
+    avgX /= seg.blocks.length; avgY /= seg.blocks.length;
+    const anchorX = worldToScreenX(avgX + 0.5);
+    const anchorY = worldToScreenY(avgY + 0.5, camY) - 14;
+    ctx.font = '14px system-ui, sans-serif';
+    const metrics = ctx.measureText(seg.name);
+    const w = metrics.width + 8, h = 20;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(anchorX - w / 2, anchorY - h / 2, w, h);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(seg.name, anchorX, anchorY);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const L = scene.L, B = scene.B;
+    const t = ((visualTime % L) + L) % L;
+    const camY = B * t / L;
+    drawGrid(camY);
+
+    const visOffs = new Map();
+    for (const seg of scene.segments) {
+        const visOff = getVisualOffset(seg, getSegmentInternalTime(seg, t));
+        visOffs.set(seg.id, visOff);
+        drawSegmentFill(seg, visOff, camY);
+    }
+    for (const seg of scene.segments) {
+        const isSelected = seg.id === selectedSegmentId;
+        const isConflict = conflictSegments.has(seg.id) && performance.now() < conflictUntil;
+        if (!isSelected && !isConflict) continue;
+        drawSegmentOutline(seg, visOffs.get(seg.id), camY, isConflict);
+    }
+    for (const seg of scene.segments) {
+        drawSegmentName(seg, visOffs.get(seg.id), camY);
+    }
+}
+
+function updateSegmentList() {
+    const list = document.getElementById('segments-list');
+    list.innerHTML = '';
+    for (const seg of scene.segments) {
+        if (seg.blocks.length === 0) continue;
+        const div = document.createElement('div');
+        div.className = 'seg-item' + (seg.id === selectedSegmentId ? ' selected' : '');
+        const swatch = document.createElement('span');
+        swatch.className = 'swatch';
+        swatch.style.background = seg.frozen ? whiten(COLOURS[seg.colour], 0.7) : COLOURS[seg.colour];
+        div.appendChild(swatch);
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = seg.name || '';
+        div.appendChild(nameSpan);
+        div.addEventListener('click', () => selectSegment(seg.id));
+        list.appendChild(div);
+    }
+}
+
+function updateSelectedPanel() {
+    const panel = document.getElementById('selected-panel');
+    const seg = scene.segments.find(s => s.id === selectedSegmentId);
+    const nameInput = document.getElementById('segName');
+    const timingInput = document.getElementById('timingInput');
+    if (!seg) {
+        panel.style.display = 'none';
+        nameInput.value = '';
+        timingInput.value = '';
+        return;
+    }
+    panel.style.display = 'flex';
+    nameInput.value = seg.name || '';
+    timingInput.value = foldTiming(seg.movement);
+}
+
+function updateTimeDisplay() {
+    document.getElementById('time-display').textContent = `t = ${logicalTime} / ${scene.L} rt`;
+}
+
+function updateDefaultTimingDisplay() {
+    document.getElementById('defaultTimingInput').value = foldTiming(scene.defaultMovement);
+}
+
+function updateCycleMetaDisplay() {
+    const bps = (10 * scene.B / scene.L).toFixed(2);
+    document.getElementById('cycle-meta-display').textContent = `speed is ${scene.B} blocks in ${scene.L}rt, or ${bps}bps`;
+}
+
+function updateUI() {
+    updateSegmentList();
+    updateSelectedPanel();
+    updateTimeDisplay();
+    updateDefaultTimingDisplay();
+    updateCycleMetaDisplay();
+    draw();
+}
+
+/* ======================================================
+ *  CONTROLLER – state, event handling, main loop
+ * ====================================================== */
+
+// Global state
+let scene = createFlyerScene(8, 2);
+let logicalTime = 0;
+let visualTime = 0;
+let playing = false;
+let pauseAtNextLogical = false;
+let transitionActive = false;
+let transitionTarget = 0;
+let playSpeed = 2;
+let arrowStepSize = 1;
+
+let selectedSegmentId = 1;
+let conflictSegments = new Set();
+let conflictUntil = 0;
+
+let mouseX = 0, mouseY = 0;
+let rightMouseDown = false, leftMouseDown = false;
+let leftMouseDownWasEmpty = false, leftMouseDownRemovedBlock = false;
+
+let panning = false;
+let panStartScreen = { x: 0, y: 0 };
+let panStartOffset = { x: 0, y: 0 };
+let panOffsetX = 0, panOffsetY = 0;
+let panKeysHeld = { w: false, a: false, s: false, d: false };
+let draggingSegmentId = null;
+let dragStartScreen = { x: 0, y: 0 };
+let dragStartScene = null;
+let dragLastDx = 0, dragLastDy = 0;
+let zoomScale = 1;
+const MIN_ZOOM = 0.2, MAX_ZOOM = 6;
+let fKeyHeld = false;
+let fToggledThisSession = new Set();
+let clipboard = null;
+
+function setConflicts(conflicts) {
+    conflictSegments = new Set(conflicts);
+    conflictUntil = performance.now() + 2000;
+}
+function clearConflicts() { conflictSegments.clear(); conflictUntil = 0; }
+
+function setLogicalTime(t) {
+    logicalTime = Math.round(t);
+    logicalTime = ((logicalTime % scene.L) + scene.L) % scene.L;
+}
+
+/* ---------- Hit testing ---------- */
+function updateMouse(e) {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+}
+
+function getGridCellFromMouse() {
+    const camY = getCameraY();
+    const worldX = screenToWorldX(mouseX);
+    const worldY = screenToWorldY(mouseY, camY);
+    return { x: Math.floor(worldX), y: Math.floor(worldY) };
+}
+
+function hitTestBlock() {
+    const camY = getCameraY();
+    for (const seg of scene.segments) {
+        const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
         for (const b of seg.blocks) {
-            if (!set.has(`${b.x + 1},${b.y}`)) edges.push([b.x + 1, b.y, b.x + 1, b.y + 1]);
-            if (!set.has(`${b.x - 1},${b.y}`)) edges.push([b.x, b.y, b.x, b.y + 1]);
-            if (!set.has(`${b.x},${b.y + 1}`)) edges.push([b.x, b.y + 1, b.x + 1, b.y + 1]);
-            if (!set.has(`${b.x},${b.y - 1}`)) edges.push([b.x, b.y, b.x + 1, b.y]);
-        }
-        return edges;
-    }
-
-    function drawSegmentFill(seg, visOff, camY) {
-        ctx.fillStyle = seg.frozen ? whiten(COLOURS[seg.colour], 0.7) : COLOURS[seg.colour];
-        const pad = 0.75;
-        for (const block of seg.blocks) {
-            const worldX = block.x;
-            const worldY = block.y + visOff;
+            const worldX = b.x, worldY = b.y + offset;
             const sx = worldToScreenX(worldX);
             const sy = worldToScreenY(worldY + 1, camY);
-            ctx.fillRect(sx - pad, sy - pad, blockSize + pad * 2, blockSize + pad * 2);
-        }
-    }
-
-    function drawSegmentOutline(seg, visOff, camY, isConflict) {
-        const edges = computeExteriorEdges(seg);
-        ctx.save();
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.lineWidth = 3;
-        ctx.shadowBlur = 12;
-        if (isConflict) {
-            ctx.strokeStyle = '#ff4444';
-            ctx.shadowColor = '#ff4444';
-        } else {
-            ctx.strokeStyle = '#ffffff';
-            ctx.shadowColor = '#ffffff';
-        }
-        ctx.beginPath();
-        for (const [x1, y1, x2, y2] of edges) {
-            const p1x = worldToScreenX(x1);
-            const p1y = worldToScreenY(y1 + visOff, camY);
-            const p2x = worldToScreenX(x2);
-            const p2y = worldToScreenY(y2 + visOff, camY);
-            ctx.moveTo(p1x, p1y);
-            ctx.lineTo(p2x, p2y);
-        }
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    function drawSegmentName(seg, visOff, camY) {
-        if (!seg.name || seg.blocks.length === 0) return;
-        let avgX = 0, avgY = 0;
-        for (const b of seg.blocks) {
-            avgX += b.x;
-            avgY += b.y + visOff;
-        }
-        avgX /= seg.blocks.length;
-        avgY /= seg.blocks.length;
-
-        const anchorX = worldToScreenX(avgX + 0.5);
-        const anchorY = worldToScreenY(avgY + 0.5, camY) - 14;
-
-        ctx.font = '14px system-ui, sans-serif';
-        const metrics = ctx.measureText(seg.name);
-        const w = metrics.width + 8;
-        const h = 20;
-
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.fillRect(anchorX - w / 2, anchorY - h / 2, w, h);
-
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(seg.name, anchorX, anchorY);
-    }
-
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const L = scene.L;
-        const B = scene.B;
-        const t = ((visualTime % L) + L) % L;
-        const camY = B * t / L;
-
-        drawGrid(camY);
-
-        const visOffs = new Map();
-        for (const seg of scene.segments) {
-            const visOff = getVisualOffset(seg, getSegmentInternalTime(seg, t));
-            visOffs.set(seg.id, visOff);
-            drawSegmentFill(seg, visOff, camY);
-        }
-
-        for (const seg of scene.segments) {
-            const isSelected = seg.id === selectedSegmentId;
-            const isConflict = conflictSegments.has(seg.id) && performance.now() < conflictUntil;
-            if (!isSelected && !isConflict) continue;
-            drawSegmentOutline(seg, visOffs.get(seg.id), camY, isConflict);
-        }
-
-        for (const seg of scene.segments) {
-            drawSegmentName(seg, visOffs.get(seg.id), camY);
-        }
-    }
-
-    // ---------- Mouse helpers ----------
-    function updateMouse(e) {
-        const rect = canvas.getBoundingClientRect();
-        mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-        mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
-    }
-
-    function getGridCellFromMouse() {
-        const camY = getCameraY();
-        const worldX = screenToWorldX(mouseX);
-        const worldY = screenToWorldY(mouseY, camY);
-        return {
-            x: Math.floor(worldX),
-            y: Math.floor(worldY)
-        };
-    }
-
-    function hitTestBlock() {
-        const camY = getCameraY();
-        for (const seg of scene.segments) {
-            const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
-            for (const b of seg.blocks) {
-                const worldX = b.x;
-                const worldY = b.y + offset;
-                const sx = worldToScreenX(worldX);
-                const sy = worldToScreenY(worldY + 1, camY);
-                if (mouseX >= sx && mouseX <= sx + blockSize && mouseY >= sy && mouseY <= sy + blockSize) {
-                    return { segId: seg.id, blockX: b.x, blockY: b.y };
-                }
+            if (mouseX >= sx && mouseX <= sx + blockSize && mouseY >= sy && mouseY <= sy + blockSize) {
+                return { segId: seg.id, blockX: b.x, blockY: b.y };
             }
         }
-        return null;
+    }
+    return null;
+}
+
+function hitTestLogical() {
+    const hit = hitTestBlock();
+    return hit ? hit.segId : null;
+}
+
+/* ---------- Block editing ---------- */
+function addBlockAtMouse() {
+    if (!selectedSegmentId) return;
+    const seg = scene.segments.find(s => s.id === selectedSegmentId);
+    if (!seg) return;
+
+    const cell = getGridCellFromMouse();
+    const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
+    const startPos = { x: cell.x, y: cell.y - offset };
+
+    if (seg.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
+    for (const s of scene.segments) {
+        if (s.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
+    }
+    for (const s of scene.segments) {
+        const off = getLogicalOffset(s, getSegmentInternalTime(s, logicalTime));
+        if (s.blocks.some(b => b.x === cell.x && b.y + off === cell.y)) return;
     }
 
-    function hitTestLogical() {
-        const hit = hitTestBlock();
-        return hit ? hit.segId : null;
-    }
-
-    // ---------- Block editing ----------
-    function addBlockAtMouse() {
-        if (!selectedSegmentId) return;
-        const seg = scene.segments.find(s => s.id === selectedSegmentId);
-        if (!seg) return;
-
-        const cell = getGridCellFromMouse();
-        const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
-        const startPos = { x: cell.x, y: cell.y - offset };
-
-        if (seg.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
-        for (const s of scene.segments) {
-            if (s.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
-        }
-        for (const s of scene.segments) {
-            const off = getLogicalOffset(s, getSegmentInternalTime(s, logicalTime));
-            if (s.blocks.some(b => b.x === cell.x && b.y + off === cell.y)) return;
-        }
-
-        const oldScene = cloneScene(scene);
-        seg.blocks.push(startPos);
-        const result = validateSceneUnfrozen(scene);
-
-        if (result.valid) {
-            clearConflicts();
-            showStatus('Block added.', false);
-            updateUI();
-        } else {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            showStatus('Invalid placement: ' + result.errors[0]);
-            updateUI();
-        }
-    }
-
-    function translateSegmentInScene(candidateScene, segmentId, dx, dy) {
-        const seg = candidateScene.segments.find(s => s.id === segmentId);
-        if (!seg) return false;
-        for (const block of seg.blocks) {
-            block.x += dx;
-            block.y += dy;
-        }
-        return true;
-    }
-
-    function tryDragSegment(dx, dy) {
-        if (draggingSegmentId === null || !dragStartScene) return false;
-
-        const exactScene = cloneScene(dragStartScene);
-        if (!translateSegmentInScene(exactScene, draggingSegmentId, dx, dy)) return false;
-        let result = validateSceneUnfrozen(exactScene);
-        if (result.valid) {
-            scene = exactScene;
-            clearConflicts();
-            dragLastDx = dx;
-            dragLastDy = dy;
-            updateUI();
-            return true;
-        }
-
-        if (dx !== 0 && dy !== 0) {
-            const horizontalScene = cloneScene(dragStartScene);
-            translateSegmentInScene(horizontalScene, draggingSegmentId, dx, 0);
-            result = validateSceneUnfrozen(horizontalScene);
-            if (result.valid) {
-                scene = horizontalScene;
-                clearConflicts();
-                dragLastDx = dx;
-                dragLastDy = 0;
-                updateUI();
-                return true;
-            }
-
-            const verticalScene = cloneScene(dragStartScene);
-            translateSegmentInScene(verticalScene, draggingSegmentId, 0, dy);
-            result = validateSceneUnfrozen(verticalScene);
-            if (result.valid) {
-                scene = verticalScene;
-                clearConflicts();
-                dragLastDx = 0;
-                dragLastDy = dy;
-                updateUI();
-                return true;
-            }
-        }
-
-        if (result && !result.valid) {
-            setConflicts(result.conflicts);
-        }
-        return false;
-    }
-
-    function startSegmentDrag() {
-        const hit = hitTestLogical();
-        if (!hit) return false;
-        const seg = scene.segments.find(s => s.id === hit);
-        if (!seg || seg.blocks.length === 0) return false;
-
-        selectSegment(hit);
-        draggingSegmentId = hit;
-        dragStartScreen = { x: mouseX, y: mouseY };
-        dragStartScene = cloneScene(scene);
-        dragLastDx = 0;
-        dragLastDy = 0;
-        return true;
-    }
-
-    function updateSegmentDrag() {
-        if (draggingSegmentId === null || !dragStartScene) return;
-
-        const dx = Math.round((mouseX - dragStartScreen.x) / blockSize);
-        const dy = -Math.round((mouseY - dragStartScreen.y) / blockSize);
-
-        if (dx === dragLastDx && dy === dragLastDy) return;
-        tryDragSegment(dx, dy);
-    }
-
-    function endSegmentDrag() {
-        draggingSegmentId = null;
-        dragStartScene = null;
-        dragLastDx = 0;
-        dragLastDy = 0;
-    }
-
-    function removeBlockAtMouse() {
-        if (!selectedSegmentId) return;
-        const seg = scene.segments.find(s => s.id === selectedSegmentId);
-        if (!seg) return;
-
-        const cell = getGridCellFromMouse();
-        const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
-        const idx = seg.blocks.findIndex(b => b.x === cell.x && b.y + offset === cell.y);
-        if (idx === -1) return;
-
-        const oldScene = cloneScene(scene);
-        seg.blocks.splice(idx, 1);
-        const result = validateSceneUnfrozen(scene);
-
-        if (result.valid) {
-            leftMouseDownRemovedBlock = true;
-            clearConflicts();
-            showStatus('Block removed.', false);
-            updateUI();
-        } else {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            showStatus('Removal would break invariants: ' + result.errors[0]);
-            updateUI();
-        }
-    }
-
-    // ---------- Segment colour / name ----------
-    function setSegmentColour(id, colour) {
-        const seg = scene.segments.find(s => s.id === id);
-        if (!seg) return;
-        const oldScene = cloneScene(scene);
-        seg.colour = colour;
-        const result = validateSceneUnfrozen(scene);
-        if (result.valid) {
-            clearConflicts();
-            showStatus('Colour changed.', false);
-            updateUI();
-        } else {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            showStatus('Colour change invalid: ' + result.errors[0]);
-            updateUI();
-        }
-    }
-
-    // ---------- Segment lifecycle ----------
-    function removeEmptyUnselectedSegment(previousId) {
-        const seg = scene.segments.find(s => s.id === previousId);
-        if (seg && seg.blocks.length === 0) {
-            scene.segments = scene.segments.filter(s => s.id !== previousId);
-        }
-    }
-
-    function selectSegment(id) {
-        if (selectedSegmentId === id) return;
-        if (selectedSegmentId !== null) {
-            removeEmptyUnselectedSegment(selectedSegmentId);
-        }
-        selectedSegmentId = id;
-        updateUI();
-    }
-
-    function createNewSegment(selectIt = true) {
-        if (selectedSegmentId !== null) {
-            removeEmptyUnselectedSegment(selectedSegmentId);
-        }
-
-        const oldScene = cloneScene(scene);
-        const id = scene.nextId++;
-        scene.segments.push({
-            id,
-            colour: 'slime',
-            name: '',
-            blocks: [],
-            movement: rotateMovementToStartAt(scene.defaultMovement, logicalTime, scene.L),
-            frozen: false
-        });
-
-        const result = validateSceneUnfrozen(scene);
-        if (!result.valid) {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            showStatus('Could not create a valid new segment: ' + result.errors[0]);
-            updateUI();
-            return;
-        }
-
-        if (selectIt) {
-            selectedSegmentId = id;
-        }
+    const oldScene = cloneScene(scene);
+    seg.blocks.push(startPos);
+    const result = validateSceneUnfrozen(scene);
+    if (result.valid) {
         clearConflicts();
+        showStatus('Block added.', false);
+        updateUI();
+    } else {
+        scene = oldScene;
+        setConflicts(result.conflicts);
+        showStatus('Invalid placement: ' + result.errors[0]);
         updateUI();
     }
+}
 
-    function deselectAndCreateBlank() {
-        if (selectedSegmentId !== null) {
-            removeEmptyUnselectedSegment(selectedSegmentId);
-        }
-        selectedSegmentId = null;
-        createNewSegment(true);
-    }
+function translateSegmentInScene(candidateScene, segmentId, dx, dy) {
+    const seg = candidateScene.segments.find(s => s.id === segmentId);
+    if (!seg) return false;
+    for (const block of seg.blocks) { block.x += dx; block.y += dy; }
+    return true;
+}
 
-    // ---------- Copy / paste ----------
-    function copySegmentUnderMouse() {
-        const hit = hitTestBlock();
-        if (!hit) {
-            showStatus('No block under the cursor to copy.');
-            return;
-        }
-        const seg = scene.segments.find(s => s.id === hit.segId);
-        if (!seg) return;
-
-        clipboard = {
-            colour: seg.colour,
-            name: seg.name,
-            blocks: seg.blocks.map(b => ({ x: b.x, y: b.y })),
-            movement: seg.movement.slice(),
-            frozen: !!seg.frozen,
-            frozenInternalTime: seg.frozen ? seg.frozenInternalTime : undefined,
-            anchor: { x: hit.blockX, y: hit.blockY }
-        };
-        showStatus('Segment copied.', false);
-    }
-
-    function pasteSegmentAtMouse() {
-        if (!clipboard) {
-            showStatus('Nothing to paste.');
-            return;
-        }
-        if (clipboard.movement.length !== scene.L) {
-            showStatus('Cannot paste: copied segment has a different cycle length (L).');
-            return;
-        }
-
-        const oldScene = cloneScene(scene);
-        const cell = getGridCellFromMouse();
-        const id = scene.nextId++;
-
-        const newSeg = {
-            id,
-            colour: clipboard.colour,
-            name: clipboard.name,
-            blocks: clipboard.blocks.map(b => ({ x: b.x, y: b.y })),
-            movement: clipboard.movement.slice(),
-            frozen: clipboard.frozen,
-            frozenInternalTime: clipboard.frozen ? clipboard.frozenInternalTime : undefined
-        };
-
-        const internalT = getSegmentInternalTime(newSeg, logicalTime);
-        const offset = getLogicalOffset(newSeg, internalT);
-        const dx = cell.x - clipboard.anchor.x;
-        const dy = (cell.y - offset) - clipboard.anchor.y;
-        for (const b of newSeg.blocks) {
-            b.x += dx;
-            b.y += dy;
-        }
-
-        scene.segments.push(newSeg);
-        const result = validateSceneUnfrozen(scene);
-
-        if (!result.valid) {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            showStatus('Paste would violate invariants: ' + result.errors[0]);
-            updateUI();
-            return;
-        }
-
+function tryDragSegment(dx, dy) {
+    if (draggingSegmentId === null || !dragStartScene) return false;
+    const exactScene = cloneScene(dragStartScene);
+    if (!translateSegmentInScene(exactScene, draggingSegmentId, dx, dy)) return false;
+    let result = validateSceneUnfrozen(exactScene);
+    if (result.valid) {
+        scene = exactScene;
         clearConflicts();
-        selectedSegmentId = id;
-        showStatus('Segment pasted.', false);
+        dragLastDx = dx; dragLastDy = dy;
         updateUI();
-    }
-
-    // ---------- Timings ----------
-    function unfoldTiming(raw) {
-        const out = [];
-        for (const ch of raw.trim()) {
-            if (ch === '0') out.push(0);
-            else if (ch === '1') out.push(1);
-            else if (ch === '2') out.push(2);
-            else if (ch === 'm' || ch === 'M') out.push(1, 2);
-            else if (ch === 'w' || ch === 'W') out.push(0, 0);
-            else return null;
-        }
-        return out;
-    }
-
-    function foldTiming(movement) {
-        const raw = movement.join('');
-        let out = '';
-        let i = 0;
-        while (i < raw.length) {
-            if (raw[i] === '1' && raw[i + 1] === '2') {
-                out += 'm';
-                i += 2;
-            } else if (raw[i] === '0' && raw[i + 1] === '0') {
-                out += 'w';
-                i += 2;
-            } else {
-                out += raw[i];
-                i += 1;
-            }
-        }
-        return out;
-    }
-
-    function applyTiming() {
-        if (!selectedSegmentId) return;
-        const seg = scene.segments.find(s => s.id === selectedSegmentId);
-        if (!seg) return;
-
-        const raw = document.getElementById('timingInput').value;
-        const unfolded = unfoldTiming(raw);
-
-        if (!unfolded) {
-            showStatus('Timings may only contain 0, 1, 2, m, w.');
-            return;
-        }
-        if (unfolded.length !== scene.L) {
-            setConflicts([seg.id]);
-            logicalTime = 0;
-            showStatus(`Timing length after unfolding is ${unfolded.length}, but L is ${scene.L}.`);
-            updateUI();
-            return;
-        }
-
-        const oldScene = cloneScene(scene);
-        seg.movement = unfolded;
-        const result = validateSceneUnfrozen(scene);
-
-        if (result.valid) {
-            clearConflicts();
-            logicalTime = 0;
-            showStatus('Timings updated.', false);
-            updateUI();
-        } else {
-            scene = oldScene;
-            setConflicts(result.conflicts);
-            logicalTime = 0;
-            showStatus('Timing change invalid: ' + result.errors[0]);
-            updateUI();
-        }
-    }
-
-    function applyDefaultTiming() {
-        const raw = document.getElementById('defaultTimingInput').value;
-        const unfolded = unfoldTiming(raw);
-        if (!unfolded) {
-            showStatus('Default timings may only contain 0, 1, 2, m, w.');
-            return;
-        }
-        const check = validateMovementPattern(unfolded, scene.L, scene.B);
-        if (!check.valid) {
-            showStatus('Default timings invalid: ' + check.error);
-            return;
-        }
-        scene.defaultMovement = unfolded;
-        showStatus('Default timings updated.', false);
-        updateUI();
-    }
-
-    // ---------- Meta (unused, kept for compatibility) ----------
-    function findUniformPairStarts(movements, wantValue) {
-        const L = movements[0]?.length ?? 0;
-        const starts = [];
-        for (let i = 0; i < L; i++) {
-            const j = (i + 1) % L;
-            if (movements.every(m => m[i] === wantValue && m[j] === wantValue)) {
-                starts.push(i);
-            }
-        }
-        return starts;
-    }
-
-    function chooseDisjointPairStarts(starts, needed, L) {
-        const chosen = [];
-        const used = new Set();
-        for (const i of starts) {
-            const j = (i + 1) % L;
-            if (used.has(i) || used.has(j)) continue;
-            chosen.push(i);
-            used.add(i);
-            used.add(j);
-            if (chosen.length === needed) break;
-        }
-        return chosen;
-    }
-
-    function changeBInPlace(targetB) {
-        if (targetB === scene.B) return true;
-        if (2 * targetB > scene.L) return false;
-
-        const diff = targetB - scene.B;
-        const movements = scene.segments.map(s => s.movement);
-        const want = diff > 0 ? 0 : 1;
-        const starts = findUniformPairStarts(movements, want);
-        const chosen = chooseDisjointPairStarts(starts, Math.abs(diff), scene.L);
-
-        if (chosen.length !== Math.abs(diff)) return false;
-
-        for (const start of chosen) {
-            const j = (start + 1) % scene.L;
-            for (const movement of movements) {
-                if (diff > 0) {
-                    movement[start] = 1;
-                    movement[j] = 2;
-                } else {
-                    movement[start] = 0;
-                    movement[j] = 0;
-                }
-            }
-        }
-        scene.B = targetB;
         return true;
     }
-
-    function removeZeroColumns(newL) {
-        while (scene.L > newL) {
-            const removable = [];
-            for (let i = 0; i < scene.L; i++) {
-                if (scene.segments.every(s => s.movement[i] === 0)) removable.push(i);
-            }
-            if (removable.length === 0) return false;
-
-            const index = removable[removable.length - 1];
-            for (const seg of scene.segments) seg.movement.splice(index, 1);
-            scene.L--;
-        }
-        return true;
+    if (dx !== 0 && dy !== 0) {
+        const horizontalScene = cloneScene(dragStartScene);
+        translateSegmentInScene(horizontalScene, draggingSegmentId, dx, 0);
+        result = validateSceneUnfrozen(horizontalScene);
+        if (result.valid) { scene = horizontalScene; clearConflicts(); dragLastDx = dx; dragLastDy = 0; updateUI(); return true; }
+        const verticalScene = cloneScene(dragStartScene);
+        translateSegmentInScene(verticalScene, draggingSegmentId, 0, dy);
+        result = validateSceneUnfrozen(verticalScene);
+        if (result.valid) { scene = verticalScene; clearConflicts(); dragLastDx = 0; dragLastDy = dy; updateUI(); return true; }
     }
+    if (result && !result.valid) setConflicts(result.conflicts);
+    return false;
+}
 
-    function applyMetaFallback(newL, newB) {
-        if (2 * newB > newL) return false;
-        scene.L = newL;
-        scene.B = newB;
-        const movement = makeMovement(newL, newB);
-        for (const seg of scene.segments) seg.movement = movement.slice();
-        return true;
-    }
+function startSegmentDrag() {
+    const hit = hitTestLogical();
+    if (!hit) return false;
+    const seg = scene.segments.find(s => s.id === hit);
+    if (!seg || seg.blocks.length === 0) return false;
+    selectSegment(hit);
+    draggingSegmentId = hit;
+    dragStartScreen = { x: mouseX, y: mouseY };
+    dragStartScene = cloneScene(scene);
+    dragLastDx = 0; dragLastDy = 0;
+    return true;
+}
 
-    function applyMeta() {
-        const newL = parseInt(document.getElementById('L').value, 10);
-        const newB = parseInt(document.getElementById('B').value, 10);
+function updateSegmentDrag() {
+    if (draggingSegmentId === null || !dragStartScene) return;
+    const dx = Math.round((mouseX - dragStartScreen.x) / blockSize);
+    const dy = -Math.round((mouseY - dragStartScreen.y) / blockSize);
+    if (dx === dragLastDx && dy === dragLastDy) return;
+    tryDragSegment(dx, dy);
+}
 
-        if (!Number.isInteger(newL) || newL < 2) {
-            showStatus('L must be an integer >= 2.');
-            return;
-        }
-        if (!Number.isInteger(newB) || newB < 0) {
-            showStatus('B must be a non-negative integer.');
-            return;
-        }
-        if (2 * newB > newL) {
-            showStatus(`2B <= L is required; requested B=${newB}, L=${newL}.`);
-            return;
-        }
-        if (newL === scene.L && newB === scene.B) return;
+function endSegmentDrag() {
+    draggingSegmentId = null;
+    dragStartScene = null;
+    dragLastDx = 0; dragLastDy = 0;
+}
 
-        const oldScene = cloneScene(scene);
-        const oldL = scene.L;
-        let success = true;
-
-        if (newL > oldL) {
-            while (scene.L < newL) {
-                for (const seg of scene.segments) seg.movement.push(0);
-                scene.L++;
-            }
-            if (!changeBInPlace(newB)) success = false;
-        } else {
-            if (!changeBInPlace(newB)) success = false;
-            if (success && newL < oldL) success = removeZeroColumns(newL);
-        }
-
-        if (success) {
-            scene.L = newL;
-            scene.B = newB;
-            const result = validateSceneUnfrozen(scene);
-            success = result.valid;
-        }
-
-        let usedFallback = false;
-
-        if (!success) {
-            scene = oldScene;
-            const proceed = confirm(
-                `L=${newL}, B=${newB} cannot be reached without violating the timing invariants using the safe transformation.\n\n` +
-                `Reset all segment timings so each segment moves B times at the very start of the cycle and waits for the rest?`
-            );
-            if (!proceed) {
-                document.getElementById('L').value = oldScene.L;
-                document.getElementById('B').value = oldScene.B;
-                showStatus('Meta change cancelled.');
-                return;
-            }
-
-            if (!applyMetaFallback(newL, newB)) {
-                showStatus('Requested L and B are incompatible.');
-                document.getElementById('L').value = oldScene.L;
-                document.getElementById('B').value = oldScene.B;
-                return;
-            }
-
-            const fallbackResult = validateSceneUnfrozen(scene);
-            if (!fallbackResult.valid) {
-                scene = oldScene;
-                document.getElementById('L').value = oldScene.L;
-                document.getElementById('B').value = oldScene.B;
-                setConflicts(fallbackResult.conflicts);
-                showStatus('Fallback timing reset would violate invariants; no changes made.');
-                return;
-            }
-            usedFallback = true;
-        }
-
-        let defaultRegenerated = false;
-        if (!validateMovementPattern(scene.defaultMovement, scene.L, scene.B).valid) {
-            scene.defaultMovement = makeMovement(scene.L, scene.B);
-            defaultRegenerated = true;
-        }
-
-        for (const seg of scene.segments) {
-            seg.frozen = false;
-            delete seg.frozenInternalTime;
-        }
-
-        playing = false;
-        pauseAtNextLogical = false;
-        transitionActive = false;
-        document.getElementById('play').textContent = 'Play';
-        setLogicalTime(0);
-        visualTime = 0;
+function removeBlockAtMouse() {
+    if (!selectedSegmentId) return;
+    const seg = scene.segments.find(s => s.id === selectedSegmentId);
+    if (!seg) return;
+    const cell = getGridCellFromMouse();
+    const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
+    const idx = seg.blocks.findIndex(b => b.x === cell.x && b.y + offset === cell.y);
+    if (idx === -1) return;
+    const oldScene = cloneScene(scene);
+    seg.blocks.splice(idx, 1);
+    const result = validateSceneUnfrozen(scene);
+    if (result.valid) {
+        leftMouseDownRemovedBlock = true;
         clearConflicts();
-        document.getElementById('L').value = scene.L;
-        document.getElementById('B').value = scene.B;
-
-        let msg = usedFallback ? 'Meta applied using fallback timing reset.' : 'Meta applied.';
-        if (defaultRegenerated) msg += ' Default timings were also reset to fit the new L/B.';
-        showStatus(msg, false);
+        showStatus('Block removed.', false);
+        updateUI();
+    } else {
+        scene = oldScene;
+        setConflicts(result.conflicts);
+        showStatus('Removal would break invariants: ' + result.errors[0]);
         updateUI();
     }
+}
 
-    // ---------- Export / Import ----------
-    function exportJSON() {
-        document.getElementById('jsonArea').value = JSON.stringify(scene);
-        showStatus('Exported to textarea.', false);
+/* ---------- Segment lifecycle / editing ---------- */
+function setSegmentColour(id, colour) {
+    const seg = scene.segments.find(s => s.id === id);
+    if (!seg) return;
+    const oldScene = cloneScene(scene);
+    seg.colour = colour;
+    const result = validateSceneUnfrozen(scene);
+    if (result.valid) { clearConflicts(); showStatus('Colour changed.', false); updateUI(); }
+    else { scene = oldScene; setConflicts(result.conflicts); showStatus('Colour change invalid: ' + result.errors[0]); updateUI(); }
+}
+
+function removeEmptyUnselectedSegment(previousId) {
+    const seg = scene.segments.find(s => s.id === previousId);
+    if (seg && seg.blocks.length === 0) scene.segments = scene.segments.filter(s => s.id !== previousId);
+}
+
+function selectSegment(id) {
+    if (selectedSegmentId === id) return;
+    if (selectedSegmentId !== null) removeEmptyUnselectedSegment(selectedSegmentId);
+    selectedSegmentId = id;
+    updateUI();
+}
+
+function createNewSegment(selectIt = true) {
+    if (selectedSegmentId !== null) removeEmptyUnselectedSegment(selectedSegmentId);
+    const oldScene = cloneScene(scene);
+    const id = scene.nextId++;
+    scene.segments.push({
+        id,
+        colour: 'slime',
+        name: '',
+        blocks: [],
+        movement: rotateMovementToStartAt(scene.defaultMovement, logicalTime, scene.L),
+        frozen: false
+    });
+    const result = validateSceneUnfrozen(scene);
+    if (!result.valid) {
+        scene = oldScene;
+        setConflicts(result.conflicts);
+        showStatus('Could not create a valid new segment: ' + result.errors[0]);
+        updateUI();
+        return;
     }
+    if (selectIt) selectedSegmentId = id;
+    clearConflicts();
+    updateUI();
+}
 
-    function importJSON() {
-        try {
-            const data = JSON.parse(document.getElementById('jsonArea').value);
-            if (!data || !Array.isArray(data.segments)) throw new Error('JSON must contain a segments array.');
-            data.L = Number(data.L);
-            data.B = Number(data.B);
-            data.nextId = data.segments.reduce((max, s) => Math.max(max, s.id || 0), 0) + 1;
+function deselectAndCreateBlank() {
+    if (selectedSegmentId !== null) removeEmptyUnselectedSegment(selectedSegmentId);
+    selectedSegmentId = null;
+    createNewSegment(true);
+}
 
-            for (const seg of data.segments) {
-                if (typeof seg.frozen !== 'boolean') seg.frozen = false;
-                if (seg.frozen && typeof seg.frozenInternalTime !== 'number') seg.frozenInternalTime = 0;
-                delete seg.timeOffset;
-            }
-            if (!Array.isArray(data.defaultMovement) || !validateMovementPattern(data.defaultMovement, data.L, data.B).valid) {
-                data.defaultMovement = makeMovement(data.L, data.B);
-            }
+/* ---------- Copy / paste ---------- */
+function copySegmentUnderMouse() {
+    const hit = hitTestBlock();
+    if (!hit) { showStatus('No block under the cursor to copy.'); return; }
+    const seg = scene.segments.find(s => s.id === hit.segId);
+    if (!seg) return;
+    clipboard = {
+        colour: seg.colour,
+        name: seg.name,
+        blocks: seg.blocks.map(b => ({ x: b.x, y: b.y })),
+        movement: seg.movement.slice(),
+        frozen: !!seg.frozen,
+        frozenInternalTime: seg.frozen ? seg.frozenInternalTime : undefined,
+        anchor: { x: hit.blockX, y: hit.blockY }
+    };
+    showStatus('Segment copied.', false);
+}
 
-            const result = validateSceneUnfrozen(data);
-            if (!result.valid) {
-                setConflicts(result.conflicts);
-                showStatus('Import invalid: ' + result.errors[0]);
-                return;
-            }
-
-            scene = data;
-            logicalTime = 0;
-            visualTime = 0;
-            playing = false;
-            pauseAtNextLogical = false;
-            transitionActive = false;
-            document.getElementById('play').textContent = 'Play';
-            clearConflicts();
-            clipboard = null;
-            if (scene.segments.length > 0) selectedSegmentId = scene.segments[0].id;
-            else selectedSegmentId = null;
-            updateUI();
-            showStatus('Imported successfully.', false);
-        } catch (e) {
-            showStatus('Import error: ' + e.message);
-        }
+function pasteSegmentAtMouse() {
+    if (!clipboard) { showStatus('Nothing to paste.'); return; }
+    if (clipboard.movement.length !== scene.L) { showStatus('Cannot paste: copied segment has a different cycle length (L).'); return; }
+    const oldScene = cloneScene(scene);
+    const cell = getGridCellFromMouse();
+    const id = scene.nextId++;
+    const newSeg = {
+        id,
+        colour: clipboard.colour,
+        name: clipboard.name,
+        blocks: clipboard.blocks.map(b => ({ x: b.x, y: b.y })),
+        movement: clipboard.movement.slice(),
+        frozen: clipboard.frozen,
+        frozenInternalTime: clipboard.frozen ? clipboard.frozenInternalTime : undefined
+    };
+    const internalT = getSegmentInternalTime(newSeg, logicalTime);
+    const offset = getLogicalOffset(newSeg, internalT);
+    const dx = cell.x - clipboard.anchor.x;
+    const dy = (cell.y - offset) - clipboard.anchor.y;
+    for (const b of newSeg.blocks) { b.x += dx; b.y += dy; }
+    scene.segments.push(newSeg);
+    const result = validateSceneUnfrozen(scene);
+    if (!result.valid) {
+        scene = oldScene;
+        setConflicts(result.conflicts);
+        showStatus('Paste would violate invariants: ' + result.errors[0]);
+        updateUI();
+        return;
     }
+    clearConflicts();
+    selectedSegmentId = id;
+    showStatus('Segment pasted.', false);
+    updateUI();
+}
 
-    // ---------- UI updates ----------
-    function updateSegmentList() {
-        const list = document.getElementById('segments-list');
-        list.innerHTML = '';
-        for (const seg of scene.segments) {
-            if (seg.blocks.length === 0) continue;
-            const div = document.createElement('div');
-            div.className = 'seg-item' + (seg.id === selectedSegmentId ? ' selected' : '');
-            const swatch = document.createElement('span');
-            swatch.className = 'swatch';
-            swatch.style.background = seg.frozen ? whiten(COLOURS[seg.colour], 0.7) : COLOURS[seg.colour];
-            div.appendChild(swatch);
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = seg.name || '';
-            div.appendChild(nameSpan);
-            div.addEventListener('click', () => {
-                selectSegment(seg.id);
-            });
-            list.appendChild(div);
-        }
+/* ---------- Timings ---------- */
+function unfoldTiming(raw) {
+    const out = [];
+    for (const ch of raw.trim()) {
+        if (ch === '0') out.push(0);
+        else if (ch === '1') out.push(1);
+        else if (ch === '2') out.push(2);
+        else if (ch === 'm' || ch === 'M') out.push(1, 2);
+        else if (ch === 'w' || ch === 'W') out.push(0, 0);
+        else return null;
     }
+    return out;
+}
 
-    function updateSelectedPanel() {
-        const panel = document.getElementById('selected-panel');
-        const seg = scene.segments.find(s => s.id === selectedSegmentId);
-        const nameInput = document.getElementById('segName');
-        const timingInput = document.getElementById('timingInput');
-
-        if (!seg) {
-            panel.style.display = 'none';
-            nameInput.value = '';
-            timingInput.value = '';
-            return;
-        }
-
-        panel.style.display = 'flex';
-        nameInput.value = seg.name || '';
-        timingInput.value = foldTiming(seg.movement);
+function foldTiming(movement) {
+    const raw = movement.join('');
+    let out = '', i = 0;
+    while (i < raw.length) {
+        if (raw[i] === '1' && raw[i + 1] === '2') { out += 'm'; i += 2; }
+        else if (raw[i] === '0' && raw[i + 1] === '0') { out += 'w'; i += 2; }
+        else { out += raw[i]; i += 1; }
     }
+    return out;
+}
 
-    function updateTimeDisplay() {
-        document.getElementById('time-display').textContent =
-            `t = ${logicalTime} / ${scene.L} rt`;
+function applyTiming() {
+    if (!selectedSegmentId) return;
+    const seg = scene.segments.find(s => s.id === selectedSegmentId);
+    if (!seg) return;
+    const raw = document.getElementById('timingInput').value;
+    const unfolded = unfoldTiming(raw);
+    if (!unfolded) { showStatus('Timings may only contain 0, 1, 2, m, w.'); return; }
+    if (unfolded.length !== scene.L) {
+        setConflicts([seg.id]);
+        logicalTime = 0;
+        showStatus(`Timing length after unfolding is ${unfolded.length}, but L is ${scene.L}.`);
+        updateUI();
+        return;
     }
-
-    function updateDefaultTimingDisplay() {
-        document.getElementById('defaultTimingInput').value = foldTiming(scene.defaultMovement);
-    }
-
-    function updateCycleMetaDisplay() {
-        const bps = (10 * scene.B / scene.L).toFixed(2);
-        document.getElementById('cycle-meta-display').textContent =
-            `speed is ${scene.B} blocks in ${scene.L}rt, or ${bps}bps`;
-    }
-
-    function updateUI() {
-        updateSegmentList();
-        updateSelectedPanel();
-        updateTimeDisplay();
-        updateDefaultTimingDisplay();
-        updateCycleMetaDisplay();
-        draw();
-    }
-
-    // ---------- Time stepping / playback ----------
-    function stepTime(delta) {
-        if (playing) return;
-        animateToLogical(logicalTime + delta);
+    const oldScene = cloneScene(scene);
+    seg.movement = unfolded;
+    const result = validateSceneUnfrozen(scene);
+    if (result.valid) {
+        clearConflicts();
+        logicalTime = 0;
+        showStatus('Timings updated.', false);
+        updateUI();
+    } else {
+        scene = oldScene;
+        setConflicts(result.conflicts);
+        logicalTime = 0;
+        showStatus('Timing change invalid: ' + result.errors[0]);
         updateUI();
     }
+}
 
-    function resetTime() {
-        playing = false;
-        pauseAtNextLogical = false;
-        document.getElementById('play').textContent = 'Play';
-        animateToLogical(0);
-        updateUI();
-    }
+function applyDefaultTiming() {
+    const raw = document.getElementById('defaultTimingInput').value;
+    const unfolded = unfoldTiming(raw);
+    if (!unfolded) { showStatus('Default timings may only contain 0, 1, 2, m, w.'); return; }
+    const check = validateMovementPattern(unfolded, scene.L, scene.B);
+    if (!check.valid) { showStatus('Default timings invalid: ' + check.error); return; }
+    scene.defaultMovement = unfolded;
+    showStatus('Default timings updated.', false);
+    updateUI();
+}
 
-    function togglePlay() {
-        if (!playing) {
-            pauseAtNextLogical = false;
-            transitionActive = false;
-            visualTime = logicalTime;
-            playing = true;
-            document.getElementById('play').textContent = 'Pause';
-        } else {
-            pauseAtNextLogical = true;
+/* ---------- Import / Export ---------- */
+function exportJSON() {
+    document.getElementById('jsonArea').value = JSON.stringify(scene);
+    showStatus('Exported to textarea.', false);
+}
+
+function importJSON() {
+    try {
+        const data = JSON.parse(document.getElementById('jsonArea').value);
+        if (!data || !Array.isArray(data.segments)) throw new Error('JSON must contain a segments array.');
+        data.L = Number(data.L);
+        data.B = Number(data.B);
+        data.nextId = data.segments.reduce((max, s) => Math.max(max, s.id || 0), 0) + 1;
+        for (const seg of data.segments) {
+            if (typeof seg.frozen !== 'boolean') seg.frozen = false;
+            if (seg.frozen && typeof seg.frozenInternalTime !== 'number') seg.frozenInternalTime = 0;
+            delete seg.timeOffset;
         }
-        updateUI();
-    }
-
-    function handleKeyboard(e) {
-        if (e.target.matches('input, textarea, select')) return;
-
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-            e.preventDefault();
-            copySegmentUnderMouse();
-            return;
+        if (!Array.isArray(data.defaultMovement) || !validateMovementPattern(data.defaultMovement, data.L, data.B).valid) {
+            data.defaultMovement = makeMovement(data.L, data.B);
         }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-            e.preventDefault();
-            pasteSegmentAtMouse();
-            return;
-        }
-
-        if (e.code === 'Space') {
-            e.preventDefault();
-            togglePlay();
-            return;
-        }
-
-        if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            stepTime(-arrowStepSize);
-            return;
-        }
-        if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            stepTime(arrowStepSize);
-            return;
-        }
-
-        if (!e.ctrlKey && !e.metaKey) {
-            const k = e.key.toLowerCase();
-            if (k === 'w') { panKeysHeld.w = true; return; }
-            if (k === 'a') { panKeysHeld.a = true; return; }
-            if (k === 's') { panKeysHeld.s = true; return; }
-            if (k === 'd') { panKeysHeld.d = true; return; }
-        }
-
-        if (e.key.toLowerCase() === 'f') {
-            if (!fKeyHeld) {
-                fKeyHeld = true;
-                fToggledThisSession = new Set();
-                if (selectedSegmentId !== null) {
-                    toggleFreezeById(selectedSegmentId);
-                    fToggledThisSession.add(selectedSegmentId);
-                }
-            }
-            e.preventDefault();
-            return;
-        }
-
-        if (e.key.toLowerCase() === 'n') {
-            e.preventDefault();
-            createNewSegment(true);
-            return;
-        }
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            deselectAndCreateBlank();
-        }
-    }
-
-    function handleKeyUp(e) {
-        const k = e.key.toLowerCase();
-        if (k === 'w') panKeysHeld.w = false;
-        if (k === 'a') panKeysHeld.a = false;
-        if (k === 's') panKeysHeld.s = false;
-        if (k === 'd') panKeysHeld.d = false;
-        if (k === 'f') {
-            fKeyHeld = false;
-            fToggledThisSession = new Set();
-        }
-    }
-
-    window.addEventListener('blur', () => {
-        panKeysHeld.w = panKeysHeld.a = panKeysHeld.s = panKeysHeld.d = false;
-        fKeyHeld = false;
-        fToggledThisSession = new Set();
-    });
-
-    // ---------- Animation loop ----------
-    const KEY_PAN_SPEED = 8; // world units (blocks) per second
-    let lastTime = performance.now();
-    function animate(now) {
-        const dt = (now - lastTime) / 1000;
-
-        if (panKeysHeld.w) panOffsetY += KEY_PAN_SPEED * dt;
-        if (panKeysHeld.s) panOffsetY -= KEY_PAN_SPEED * dt;
-        if (panKeysHeld.a) panOffsetX -= KEY_PAN_SPEED * dt;
-        if (panKeysHeld.d) panOffsetX += KEY_PAN_SPEED * dt;
-
-        if (!playing && transitionActive) {
-            const oldVisual = visualTime;
-            const distance = transitionTarget - oldVisual;
-            const transitionSpeed = Math.max(4, playSpeed * 4);
-            const move = transitionSpeed * dt;
-            let newVisual;
-            if (Math.abs(distance) <= move) {
-                newVisual = transitionTarget;
-                transitionActive = false;
-            } else {
-                newVisual = oldVisual + Math.sign(distance) * move;
-            }
-
-            // Detect if we crossed the wrap point
-            if ((oldVisual < scene.L && newVisual >= scene.L) ||
-                (oldVisual >= scene.L && newVisual < oldVisual)) {
-                shiftFrozenBlocksOnWrap();
-            }
-
-            visualTime = normaliseTime(newVisual);
-        }
-
-        if (playing) {
-            const oldVisual = visualTime;
-            const newVisualRaw = oldVisual + dt * playSpeed;
-            if (oldVisual < scene.L && newVisualRaw >= scene.L) {
-                shiftFrozenBlocksOnWrap();
-            }
-            visualTime = normaliseTime(newVisualRaw);
-
-            if (pauseAtNextLogical) {
-                const oldFloor = Math.floor(oldVisual + 1e-9);
-                const newFloor = Math.floor(visualTime + 1e-9);
-                if (newFloor !== oldFloor || Math.abs(visualTime - Math.round(visualTime)) < 1e-6) {
-                    advanceLogicalTo(Math.round(visualTime));
-                    visualTime = logicalTime;
-                    playing = false;
-                    pauseAtNextLogical = false;
-                    document.getElementById('play').textContent = 'Play';
-                    updateTimeDisplay();
-                }
-            } else {
-                advanceLogicalTo(Math.floor(visualTime + 1e-9));
-                updateTimeDisplay();
-            }
-        }
-
-        lastTime = now;
-        draw();
-        requestAnimationFrame(animate);
-    }
-
-    // ---------- Event wiring ----------
-    canvas.addEventListener('mousedown', (e) => {
-        updateMouse(e);
-
-        if (e.button === 0 && e.ctrlKey && !e.shiftKey) {
-            if (startSegmentDrag()) {
-                e.preventDefault();
-                return;
-            }
-        }
-
-        if (e.button === 0 && (e.ctrlKey || e.shiftKey)) {
-            panning = true;
-            panStartScreen = { x: mouseX, y: mouseY };
-            panStartOffset = { x: panOffsetX, y: panOffsetY };
-            e.preventDefault();
-            return;
-        }
-
-        if (e.button === 2) {
-            rightMouseDown = true;
-            addBlockAtMouse();
-            e.preventDefault();
-        } else if (e.button === 0) {
-            leftMouseDown = true;
-            leftMouseDownWasEmpty = !hitTestBlock();
-            leftMouseDownRemovedBlock = false;
-            removeBlockAtMouse();
-        }
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-        updateMouse(e);
-
-        if (draggingSegmentId !== null) {
-            updateSegmentDrag();
-            return;
-        }
-
-        if (panning) {
-            const dx = (mouseX - panStartScreen.x) / blockSize;
-            const dy = (mouseY - panStartScreen.y) / blockSize;
-            panOffsetX = panStartOffset.x - dx;
-            panOffsetY = panStartOffset.y + dy;
-            draw();
-            return;
-        }
-
-        if (rightMouseDown) {
-            addBlockAtMouse();
-        } else if (leftMouseDown) {
-            removeBlockAtMouse();
-        } else {
-            const hit = hitTestLogical();
-            if (hit) {
-                hoveredSegmentId = hit;
-                selectedSegmentId = hit;
-                updateUI();
-
-                if (fKeyHeld && !fToggledThisSession.has(hit)) {
-                    toggleFreezeById(hit);
-                    fToggledThisSession.add(hit);
-                }
-            } else {
-                hoveredSegmentId = null;
-            }
-        }
-    });
-
-    canvas.addEventListener('mouseup', (e) => {
-        if (e.button === 2) rightMouseDown = false;
-        if (e.button === 0) {
-            leftMouseDown = false;
-            endSegmentDrag();
-            if (leftMouseDownWasEmpty && !leftMouseDownRemovedBlock) {
-                createNewSegment(true);
-            }
-            leftMouseDownWasEmpty = false;
-            leftMouseDownRemovedBlock = false;
-        }
-        panning = false;
-    });
-
-    canvas.addEventListener('mouseleave', () => {
-        rightMouseDown = false;
-        leftMouseDown = false;
-        leftMouseDownWasEmpty = false;
-        leftMouseDownRemovedBlock = false;
-        panning = false;
-        endSegmentDrag();
-    });
-
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    canvas.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        updateMouse(e);
-
-        const camY = getCameraY();
-        const worldXBefore = screenToWorldX(mouseX);
-        const worldYBefore = screenToWorldY(mouseY, camY);
-
-        const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-        zoomScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomScale * zoomFactor));
-        blockSize = baseBlockSize * zoomScale;
-
-        panOffsetX = worldXBefore - (mouseX - originX) / blockSize;
-        panOffsetY = (worldYBefore - camY) - (originY - mouseY) / blockSize;
-
-        draw();
-    }, { passive: false });
-
-    // UI buttons
-    document.getElementById('step-2').addEventListener('click', () => stepTime(-2));
-    document.getElementById('step-1').addEventListener('click', () => stepTime(-1));
-    document.getElementById('reset').addEventListener('click', resetTime);
-    document.getElementById('step+1').addEventListener('click', () => stepTime(1));
-    document.getElementById('step+2').addEventListener('click', () => stepTime(2));
-    document.getElementById('play').addEventListener('click', togglePlay);
-    document.getElementById('applyTiming').addEventListener('click', applyTiming);
-    document.getElementById('applyDefaultTiming').addEventListener('click', applyDefaultTiming);
-    document.getElementById('export').addEventListener('click', exportJSON);
-    document.getElementById('import').addEventListener('click', importJSON);
-    document.getElementById('newSegment').addEventListener('click', () => createNewSegment(true));
-    document.getElementById('arrowStepToggle').addEventListener('click', () => {
-        arrowStepSize = arrowStepSize === 1 ? 2 : 1;
-        document.getElementById('arrowStepToggle').textContent = arrowStepSize + ' rt';
-    });
-    window.addEventListener('keydown', handleKeyboard);
-    window.addEventListener('keyup', handleKeyUp);
-
-    const speedSlider = document.getElementById('speedSlider');
-    const speedValue = document.getElementById('speedValue');
-    speedSlider.addEventListener('input', () => {
-        playSpeed = parseFloat(speedSlider.value);
-        speedValue.textContent = playSpeed.toFixed(1) + ' rt/s';
-    });
-
-    document.querySelectorAll('.colour-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const colour = btn.dataset.colour;
-            setSegmentColour(selectedSegmentId, colour);
-        });
-    });
-
-    document.getElementById('segName').addEventListener('input', (e) => {
-        const seg = scene.segments.find(s => s.id === selectedSegmentId);
-        if (seg) {
-            seg.name = e.target.value;
-            updateSegmentList();
-            draw();
-        }
-    });
-
-    // ---------- Initialisation ----------
-    function startEditor(L, B) {
-        scene = createFlyerScene(L, B);
+        const result = validateSceneUnfrozen(data);
+        if (!result.valid) { setConflicts(result.conflicts); showStatus('Import invalid: ' + result.errors[0]); return; }
+        scene = data;
         logicalTime = 0;
         visualTime = 0;
         playing = false;
         pauseAtNextLogical = false;
         transitionActive = false;
-        transitionTarget = 0;
+        document.getElementById('play').textContent = 'Play';
+        clearConflicts();
         clipboard = null;
-        selectedSegmentId = scene.segments.length ? scene.segments[0].id : null;
-        document.getElementById('setup-screen').style.display = 'none';
-        resizeCanvas();
+        if (scene.segments.length > 0) selectedSegmentId = scene.segments[0].id;
+        else selectedSegmentId = null;
         updateUI();
-        exportJSON();
+        showStatus('Imported successfully.', false);
+    } catch (e) {
+        showStatus('Import error: ' + e.message);
+    }
+}
+
+/* ---------- Time stepping / playback ---------- */
+function stepTime(delta) { if (playing) return; animateToLogical(logicalTime + delta); updateUI(); }
+
+function resetTime() {
+    playing = false;
+    pauseAtNextLogical = false;
+    document.getElementById('play').textContent = 'Play';
+    animateToLogical(0);
+    updateUI();
+}
+
+function togglePlay() {
+    if (!playing) {
+        pauseAtNextLogical = false;
+        transitionActive = false;
+        visualTime = logicalTime;
+        playing = true;
+        document.getElementById('play').textContent = 'Pause';
+    } else {
+        pauseAtNextLogical = true;
+    }
+    updateUI();
+}
+
+/* ---------- Keyboard ---------- */
+function handleKeyboard(e) {
+    if (e.target.matches('input, textarea, select')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); copySegmentUnderMouse(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteSegmentAtMouse(); return; }
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); stepTime(-arrowStepSize); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); stepTime(arrowStepSize); return; }
+    if (!e.ctrlKey && !e.metaKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'w') { panKeysHeld.w = true; return; }
+        if (k === 'a') { panKeysHeld.a = true; return; }
+        if (k === 's') { panKeysHeld.s = true; return; }
+        if (k === 'd') { panKeysHeld.d = true; return; }
+    }
+    if (e.key.toLowerCase() === 'f') {
+        if (!fKeyHeld) {
+            fKeyHeld = true;
+            fToggledThisSession = new Set();
+            if (selectedSegmentId !== null) {
+                toggleFreezeById(selectedSegmentId);
+                fToggledThisSession.add(selectedSegmentId);
+            }
+        }
+        e.preventDefault();
+        return;
+    }
+    if (e.key.toLowerCase() === 'n') { e.preventDefault(); createNewSegment(true); return; }
+    if (e.key === 'Escape') { e.preventDefault(); deselectAndCreateBlank(); }
+}
+
+function handleKeyUp(e) {
+    const k = e.key.toLowerCase();
+    if (k === 'w') panKeysHeld.w = false;
+    if (k === 'a') panKeysHeld.a = false;
+    if (k === 's') panKeysHeld.s = false;
+    if (k === 'd') panKeysHeld.d = false;
+    if (k === 'f') { fKeyHeld = false; fToggledThisSession = new Set(); }
+}
+
+window.addEventListener('blur', () => {
+    panKeysHeld.w = panKeysHeld.a = panKeysHeld.s = panKeysHeld.d = false;
+    fKeyHeld = false;
+    fToggledThisSession = new Set();
+});
+
+/* ---------- Animation loop ---------- */
+const KEY_PAN_SPEED = 8;
+let lastTime = performance.now();
+function animate(now) {
+    const dt = (now - lastTime) / 1000;
+
+    if (panKeysHeld.w) panOffsetY += KEY_PAN_SPEED * dt;
+    if (panKeysHeld.s) panOffsetY -= KEY_PAN_SPEED * dt;
+    if (panKeysHeld.a) panOffsetX -= KEY_PAN_SPEED * dt;
+    if (panKeysHeld.d) panOffsetX += KEY_PAN_SPEED * dt;
+
+    if (!playing && transitionActive) {
+        const oldVisual = visualTime;
+        const distance = transitionTarget - oldVisual;
+        const transitionSpeed = Math.max(4, playSpeed * 4);
+        const move = transitionSpeed * dt;
+        let newVisual;
+        if (Math.abs(distance) <= move) { newVisual = transitionTarget; transitionActive = false; }
+        else { newVisual = oldVisual + Math.sign(distance) * move; }
+
+        if ((oldVisual < scene.L && newVisual >= scene.L) ||
+            (oldVisual >= scene.L && newVisual < oldVisual)) {
+            shiftFrozenBlocksOnWrap();
+        }
+        visualTime = normaliseTime(newVisual);
     }
 
-    document.getElementById('createFlyer').addEventListener('click', () => {
-        const L = parseInt(document.getElementById('setupL').value, 10);
-        const B = parseInt(document.getElementById('setupB').value, 10);
-        const setupStatus = document.getElementById('setup-status');
-
-        if (!Number.isInteger(L) || L < 2) {
-            setupStatus.textContent = 'L must be an integer >= 2.';
-            return;
+    if (playing) {
+        const oldVisual = visualTime;
+        const newVisualRaw = oldVisual + dt * playSpeed;
+        if (oldVisual < scene.L && newVisualRaw >= scene.L) {
+            shiftFrozenBlocksOnWrap();
         }
-        if (!Number.isInteger(B) || B < 0 || 2 * B > L) {
-            setupStatus.textContent = 'B must be a non-negative integer with 2B <= L.';
-            return;
+        visualTime = normaliseTime(newVisualRaw);
+
+        if (pauseAtNextLogical) {
+            const oldFloor = Math.floor(oldVisual + 1e-9);
+            const newFloor = Math.floor(visualTime + 1e-9);
+            if (newFloor !== oldFloor || Math.abs(visualTime - Math.round(visualTime)) < 1e-6) {
+                advanceLogicalTo(Math.round(visualTime));
+                visualTime = logicalTime;
+                playing = false;
+                pauseAtNextLogical = false;
+                document.getElementById('play').textContent = 'Play';
+                updateTimeDisplay();
+            }
+        } else {
+            advanceLogicalTo(Math.floor(visualTime + 1e-9));
+            updateTimeDisplay();
         }
+    }
 
-        setupStatus.textContent = '';
-        startEditor(L, B);
-    });
-
-    resizeCanvas();
+    lastTime = now;
+    draw();
     requestAnimationFrame(animate);
+}
 
+/* ---------- Event wiring ---------- */
+canvas.addEventListener('mousedown', (e) => {
+    updateMouse(e);
+    if (e.button === 0 && e.ctrlKey && !e.shiftKey) {
+        if (startSegmentDrag()) { e.preventDefault(); return; }
+    }
+    if (e.button === 0 && (e.ctrlKey || e.shiftKey)) {
+        panning = true;
+        panStartScreen = { x: mouseX, y: mouseY };
+        panStartOffset = { x: panOffsetX, y: panOffsetY };
+        e.preventDefault();
+        return;
+    }
+    if (e.button === 2) {
+        rightMouseDown = true;
+        addBlockAtMouse();
+        e.preventDefault();
+    } else if (e.button === 0) {
+        leftMouseDown = true;
+        leftMouseDownWasEmpty = !hitTestBlock();
+        leftMouseDownRemovedBlock = false;
+        removeBlockAtMouse();
+    }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    updateMouse(e);
+    if (draggingSegmentId !== null) { updateSegmentDrag(); return; }
+    if (panning) {
+        const dx = (mouseX - panStartScreen.x) / blockSize;
+        const dy = (mouseY - panStartScreen.y) / blockSize;
+        panOffsetX = panStartOffset.x - dx;
+        panOffsetY = panStartOffset.y + dy;
+        draw();
+        return;
+    }
+    if (rightMouseDown) { addBlockAtMouse(); }
+    else if (leftMouseDown) { removeBlockAtMouse(); }
+    else {
+        const hit = hitTestLogical();
+        if (hit) {
+            selectedSegmentId = hit;
+            updateUI();
+            if (fKeyHeld && !fToggledThisSession.has(hit)) {
+                toggleFreezeById(hit);
+                fToggledThisSession.add(hit);
+            }
+        }
+    }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+    if (e.button === 2) rightMouseDown = false;
+    if (e.button === 0) {
+        leftMouseDown = false;
+        endSegmentDrag();
+        if (leftMouseDownWasEmpty && !leftMouseDownRemovedBlock) {
+            createNewSegment(true);
+        }
+        leftMouseDownWasEmpty = false;
+        leftMouseDownRemovedBlock = false;
+    }
+    panning = false;
+});
+
+canvas.addEventListener('mouseleave', () => {
+    rightMouseDown = false; leftMouseDown = false;
+    leftMouseDownWasEmpty = false; leftMouseDownRemovedBlock = false;
+    panning = false;
+    endSegmentDrag();
+});
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    updateMouse(e);
+    const camY = getCameraY();
+    const worldXBefore = screenToWorldX(mouseX);
+    const worldYBefore = screenToWorldY(mouseY, camY);
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    zoomScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomScale * zoomFactor));
+    blockSize = baseBlockSize * zoomScale;
+    panOffsetX = worldXBefore - (mouseX - originX) / blockSize;
+    panOffsetY = (worldYBefore - camY) - (originY - mouseY) / blockSize;
+    draw();
+}, { passive: false });
+
+// UI buttons
+document.getElementById('step-2').addEventListener('click', () => stepTime(-2));
+document.getElementById('step-1').addEventListener('click', () => stepTime(-1));
+document.getElementById('reset').addEventListener('click', resetTime);
+document.getElementById('step+1').addEventListener('click', () => stepTime(1));
+document.getElementById('step+2').addEventListener('click', () => stepTime(2));
+document.getElementById('play').addEventListener('click', togglePlay);
+document.getElementById('applyTiming').addEventListener('click', applyTiming);
+document.getElementById('applyDefaultTiming').addEventListener('click', applyDefaultTiming);
+document.getElementById('export').addEventListener('click', exportJSON);
+document.getElementById('import').addEventListener('click', importJSON);
+document.getElementById('newSegment').addEventListener('click', () => createNewSegment(true));
+document.getElementById('arrowStepToggle').addEventListener('click', () => {
+    arrowStepSize = arrowStepSize === 1 ? 2 : 1;
+    document.getElementById('arrowStepToggle').textContent = arrowStepSize + ' rt';
+});
+window.addEventListener('keydown', handleKeyboard);
+window.addEventListener('keyup', handleKeyUp);
+
+const speedSlider = document.getElementById('speedSlider');
+const speedValue = document.getElementById('speedValue');
+speedSlider.addEventListener('input', () => {
+    playSpeed = parseFloat(speedSlider.value);
+    speedValue.textContent = playSpeed.toFixed(1) + ' rt/s';
+});
+
+document.querySelectorAll('.colour-btn').forEach(btn => {
+    btn.addEventListener('click', () => setSegmentColour(selectedSegmentId, btn.dataset.colour));
+});
+
+document.getElementById('segName').addEventListener('input', (e) => {
+    const seg = scene.segments.find(s => s.id === selectedSegmentId);
+    if (seg) { seg.name = e.target.value; updateSegmentList(); draw(); }
+});
+
+/* ---------- Initialisation ---------- */
+function startEditor(L, B) {
+    scene = createFlyerScene(L, B);
+    logicalTime = 0;
+    visualTime = 0;
+    playing = false;
+    pauseAtNextLogical = false;
+    transitionActive = false;
+    transitionTarget = 0;
+    clipboard = null;
+    selectedSegmentId = scene.segments.length ? scene.segments[0].id : null;
+    document.getElementById('setup-screen').style.display = 'none';
+    resizeCanvas();
+    updateUI();
+    exportJSON();
+}
+
+document.getElementById('createFlyer').addEventListener('click', () => {
+    const L = parseInt(document.getElementById('setupL').value, 10);
+    const B = parseInt(document.getElementById('setupB').value, 10);
+    const setupStatus = document.getElementById('setup-status');
+    if (!Number.isInteger(L) || L < 2) { setupStatus.textContent = 'L must be an integer >= 2.'; return; }
+    if (!Number.isInteger(B) || B < 0 || 2 * B > L) { setupStatus.textContent = 'B must be a non-negative integer with 2B <= L.'; return; }
+    setupStatus.textContent = '';
+    startEditor(L, B);
+});
+
+resizeCanvas();
+requestAnimationFrame(animate);
 </script>
 </body>
 </html>
