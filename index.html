@@ -138,6 +138,11 @@
             text-align: right;
             font-variant-numeric: tabular-nums;
         }
+        #hints {
+            font-size: 11px;
+            color: #889;
+            line-height: 1.5;
+        }
 
         #setup-screen {
             position: fixed;
@@ -222,6 +227,9 @@
             width: 140px !important;
             font-family: monospace;
         }
+        #defaultTimingInput {
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -249,12 +257,17 @@
         <h2>Flyer Editor</h2>
 
         <div class="panel">
-            <h3>Cycle Meta</h3>
+            <h3>Cycle</h3>
+            <div class="row" id="cycle-meta-display" style="font-size:14px; color:#aab;"></div>
+        </div>
+
+        <div class="panel">
+            <h3>Default Timings</h3>
             <div class="row">
-                <label>L: <input id="L" type="number" min="2" step="1"></label>
-                <label>B: <input id="B" type="number" min="0" step="1"></label>
-                <button id="applyMeta">Apply</button>
+                <label style="flex:1;">Timing: <input id="defaultTimingInput" type="text" placeholder="0 1 2 m w"></label>
+                <button id="applyDefaultTiming">Apply</button>
             </div>
+            <div style="font-size:11px; color:#889; margin-top:2px;">Used for newly created segments, rooted at whatever time you're currently at.</div>
         </div>
 
         <div class="panel">
@@ -274,6 +287,10 @@
                 </label>
                 <span id="speedValue">2.0 rt/s</span>
             </div>
+            <div class="row" style="margin-top: 8px;">
+                <label style="margin-bottom:0; font-size:12px; color:#aab;">Arrow key step:</label>
+                <button id="arrowStepToggle">1 rt</button>
+            </div>
         </div>
 
         <div class="panel">
@@ -290,6 +307,8 @@
                 <button id="import">Import JSON</button>
             </div>
         </div>
+
+        <div id="hints">Shortcuts: N new segment &middot; Esc deselect + new &middot; F freeze (hold + hover to paint) &middot; Ctrl+C / Ctrl+V copy / paste segment at cursor &middot; Space play/pause &middot; &larr;/&rarr; step &middot; WASD pan</div>
 
         <div id="status"></div>
     </div>
@@ -321,6 +340,16 @@
         blue: '#4a8fd4'
     };
 
+    function whiten(hex, amount) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        const nr = Math.round(r + (255 - r) * amount);
+        const ng = Math.round(g + (255 - g) * amount);
+        const nb = Math.round(b + (255 - b) * amount);
+        return `rgb(${nr},${ng},${nb})`;
+    }
+
     // ---------- Flyer generation ----------
     function makeMovement(L, B) {
         return [...Array(B)].flatMap(() => [1, 2]).concat(Array(L - 2 * B).fill(0));
@@ -337,17 +366,20 @@
                     colour: 'slime',
                     name: 'Core',
                     blocks: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-                    movement: movement.slice()
+                    movement: movement.slice(),
+                    frozen: false
                 },
                 {
                     id: 2,
                     colour: 'honey',
                     name: 'Piston',
                     blocks: [{ x: 2, y: 0 }, { x: 2, y: 1 }],
-                    movement: movement.slice()
+                    movement: movement.slice(),
+                    frozen: false
                 }
             ],
-            nextId: 3
+            nextId: 3,
+            defaultMovement: movement.slice()
         };
     }
 
@@ -360,6 +392,7 @@
     let transitionActive = false;
     let transitionTarget = 0;
     let playSpeed = 2; // rt per second
+    let arrowStepSize = 1;
 
     let selectedSegmentId = 1;
     let hoveredSegmentId = null;
@@ -371,6 +404,8 @@
     let mouseY = 0;
     let rightMouseDown = false;
     let leftMouseDown = false;
+    let leftMouseDownWasEmpty = false;
+    let leftMouseDownRemovedBlock = false;
 
     // Panning / zoom state. Pan is stored in world (block) units; zoom is a
     // multiplier applied on top of the base block size computed on resize.
@@ -379,6 +414,7 @@
     let panStartOffset = { x: 0, y: 0 };
     let panOffsetX = 0;
     let panOffsetY = 0;
+    let panKeysHeld = { w: false, a: false, s: false, d: false };
     let draggingSegmentId = null;
     let dragStartScreen = { x: 0, y: 0 };
     let dragStartScene = null;
@@ -387,6 +423,11 @@
     let zoomScale = 1;
     const MIN_ZOOM = 0.2;
     const MAX_ZOOM = 6;
+
+    // Freeze-key ("f") held-and-hover state, and the segment clipboard.
+    let fKeyHeld = false;
+    let fToggledThisSession = new Set();
+    let clipboard = null;
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -414,9 +455,18 @@
         return countTwosBefore(seg.movement, i);
     }
 
+    // Logical block offset: state 2 means the segment has completed its move
+    // and is shifted one block forward relative to states 0/1.
+    function getLogicalOffset(seg, time) {
+        const L = scene.L;
+        const t = ((time % L) + L) % L;
+        const i = Math.floor(t);
+        return countTwosBefore(seg.movement, i) + (seg.movement[i] === 2 ? 1 : 0);
+    }
+
     function visStateValue(s) {
         if (s === 1) return 0.2;
-        if (s === 2) return 0.8;
+        if (s === 2) return -0.2;  // logical offset is 1, displayed 0.2 backwards
         return 0;
     }
 
@@ -427,16 +477,16 @@
         const i = Math.floor(t);
         const f = t - i;
 
-        const offset_i = countTwosBefore(seg.movement, i);
+        const offset_i = getLogicalOffset(seg, i);
         const state_i = seg.movement[i];
         const vi = offset_i + visStateValue(state_i);
 
         let nextOffset, nextState;
         if (i === L - 1) {
-            nextOffset = scene.B;
+            nextOffset = getLogicalOffset(seg, 0) + scene.B;
             nextState = seg.movement[0];
         } else {
-            nextOffset = countTwosBefore(seg.movement, i + 1);
+            nextOffset = getLogicalOffset(seg, i + 1);
             nextState = seg.movement[i + 1];
         }
         const vn = nextOffset + visStateValue(nextState);
@@ -448,14 +498,149 @@
         return ((t % scene.L) + scene.L) % scene.L;
     }
 
+    function getSegmentInternalTime(seg, globalT) {
+        if (seg.frozen) return seg.frozenInternalTime;
+        return globalT;
+    }
+
+    function freezeSegment(seg) {
+        if (seg.frozen) return;
+        seg.frozenInternalTime = normaliseTime(logicalTime);
+        seg.frozen = true;
+    }
+
+    function rotateMovementToStartAt(movement, startIndex, L) {
+        const rotated = new Array(L);
+        for (let t = 0; t < L; t++) {
+            rotated[t] = movement[((t - startIndex) % L + L) % L];
+        }
+        return rotated;
+    }
+
+    function shiftFrozenBlocksOnWrap() {
+        for (const seg of scene.segments) {
+            if (seg.frozen) {
+                for (const block of seg.blocks) {
+                    block.y -= scene.B;
+                }
+            }
+        }
+    }
+
+    function unfreezeSegmentInScene(seg, targetScene, unfreezeTime = logicalTime) {
+        if (!seg.frozen) return;
+        const L = targetScene.L;
+        const F = normaliseTime(seg.frozenInternalTime);
+        const T = normaliseTime(unfreezeTime);
+
+        // Compute old logical offset
+        const iF = Math.floor(((F % L) + L) % L);
+        let countTwosOld = 0;
+        for (let j = 0; j < iF; j++) if (seg.movement[j] === 2) countTwosOld++;
+        const oldOffset = countTwosOld + (seg.movement[iF] === 2 ? 1 : 0);
+
+        // Rotate movement
+        const newMovement = rotateMovementToStartAt(seg.movement, T - F, L);
+
+        // Compute new logical offset
+        const iT = Math.floor(((T % L) + L) % L);
+        let countTwosNew = 0;
+        for (let j = 0; j < iT; j++) if (newMovement[j] === 2) countTwosNew++;
+        const newOffset = countTwosNew + (newMovement[iT] === 2 ? 1 : 0);
+
+        const delta = oldOffset - newOffset;
+
+        seg.movement = newMovement;
+        for (const block of seg.blocks) {
+            block.y += delta;
+        }
+        seg.frozen = false;
+        delete seg.frozenInternalTime;
+    }
+
+    function unfreezeSegmentNoValidate(seg) {
+        if (!seg.frozen) return false;
+        unfreezeSegmentInScene(seg, scene);
+        return true;
+    }
+
+    function unfreezeSegment(seg) {
+        if (!seg.frozen) return false;
+        const oldScene = cloneScene(scene);
+        if (!unfreezeSegmentNoValidate(seg)) return false;
+        const result = validateSceneUnfrozen(scene);
+        if (!result.valid) {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            showStatus('Unfreeze would violate invariants; no changes made.', true);
+            updateUI();
+            return false;
+        }
+        return true;
+    }
+
+    function toggleFreezeById(id) {
+        const seg = scene.segments.find(s => s.id === id);
+        if (!seg) return;
+
+        if (seg.frozen) {
+            unfreezeSegmentInScene(seg, scene);
+        } else {
+            seg.frozenInternalTime = normaliseTime(logicalTime);
+            seg.frozen = true;
+        }
+        updateUI();
+    }
+
     function setLogicalTime(t) {
         logicalTime = Math.round(t);
         logicalTime = ((logicalTime % scene.L) + scene.L) % scene.L;
     }
 
+    function resolveFreezeConflicts(targetTime) {
+        const unfrozenNames = [];
+
+        while (scene.segments.some(s => s.frozen)) {
+            // Simulate unfreezing all frozen segments at the target time
+            const result = validateSceneUnfrozen(scene, targetTime);
+            if (result.valid) break;
+
+            let unfrozeAny = false;
+            for (const seg of scene.segments) {
+                if (seg.frozen && result.conflicts.has(seg.id)) {
+                    // Unfreeze troublemakers at the CURRENT time
+                    unfreezeSegmentInScene(seg, scene, logicalTime);
+                    unfrozenNames.push(seg.name || `Segment ${seg.id}`);
+                    unfrozeAny = true;
+                }
+            }
+
+            if (!unfrozeAny) {
+                return false;
+            }
+        }
+
+        if (unfrozenNames.length > 0) {
+            showStatus(`Auto-unfroze ${unfrozenNames.join(', ')} to avoid an invariant violation.`, true);
+        }
+        return true;
+    }
+
+    function advanceLogicalTo(target) {
+        const wrapped = ((Math.round(target) % scene.L) + scene.L) % scene.L;
+        if (wrapped === logicalTime) return;
+
+        if (!resolveFreezeConflicts(wrapped)) {
+            showStatus('Cannot move: invariants would be violated and no safe unfreeze is possible.', true);
+            return;
+        }
+
+        setLogicalTime(wrapped);
+    }
+
     function animateToLogical(target) {
         if (playing) return;
-        setLogicalTime(target);
+        advanceLogicalTo(target);
         const startTime = visualTime;
         const startMod = normaliseTime(startTime);
         const targetMod = logicalTime;
@@ -513,14 +698,16 @@
             return { valid: false, conflicts, errors };
         }
 
-        // Collision and adjacency at each integer time step.
+        // Collision and adjacency at each integer time step, using logical offsets
+        // so that state 2 blocks are correctly shifted one block forward.
         for (let t = 0; t < scene.L; t++) {
-            const map = new Map(); // key -> { segId, state, colour }
+            const map = new Map();
             let overlap = false;
 
             for (const seg of scene.segments) {
-                const offset = countTwosBefore(seg.movement, t);
-                const state = seg.movement[t];
+                const i = t;
+                const offset = getLogicalOffset(seg, i);
+                const state = seg.movement[i];
 
                 for (const block of seg.blocks) {
                     const y = block.y + offset;
@@ -538,7 +725,6 @@
 
             if (overlap) continue;
 
-            // Adjacency restrictions for same-colour, different-segment blocks.
             for (const [key, entry] of map) {
                 const [x, y] = key.split(',').map(Number);
                 const neighbours = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
@@ -561,6 +747,35 @@
         }
 
         return { valid: errors.length === 0, conflicts, errors };
+    }
+
+    function validateSceneUnfrozen(scene, unfreezeTime = logicalTime) {
+        const simulated = cloneScene(scene);
+        for (const seg of simulated.segments) {
+            if (seg.frozen) {
+                unfreezeSegmentInScene(seg, simulated, unfreezeTime);
+            }
+        }
+        return validateScene(simulated);
+    }
+
+    function validateMovementPattern(movement, L, B) {
+        if (!Array.isArray(movement) || movement.length !== L) {
+            return { valid: false, error: `length must be ${L}` };
+        }
+        const ones = movement.filter(v => v === 1).length;
+        if (ones !== B) {
+            return { valid: false, error: `number of 1s must be ${B}` };
+        }
+        for (let i = 0; i < L; i++) {
+            if (movement[i] === 1 && movement[(i + 1) % L] !== 2) {
+                return { valid: false, error: `1 at index ${i} is not followed by 2` };
+            }
+            if (movement[i] === 2 && movement[(i - 1 + L) % L] !== 1) {
+                return { valid: false, error: `2 at index ${i} is not preceded by 1` };
+            }
+        }
+        return { valid: true };
     }
 
     // ---------- Conflict helpers ----------
@@ -641,9 +856,6 @@
         }
     }
 
-    // Exterior edges of a segment's shape, in local (unshifted) block
-    // coordinates. An edge is exterior if the neighbouring cell on that
-    // side is not part of the same segment. Each edge is [x1, y1, x2, y2].
     function computeExteriorEdges(seg) {
         const set = new Set(seg.blocks.map(b => `${b.x},${b.y}`));
         const edges = [];
@@ -656,21 +868,19 @@
         return edges;
     }
 
-    function drawSegmentBlocks(seg, visOff, camY, isSelected, isConflict) {
-        ctx.fillStyle = COLOURS[seg.colour];
+    function drawSegmentFill(seg, visOff, camY) {
+        ctx.fillStyle = seg.frozen ? whiten(COLOURS[seg.colour], 0.7) : COLOURS[seg.colour];
+        const pad = 0.75;
         for (const block of seg.blocks) {
             const worldX = block.x;
             const worldY = block.y + visOff;
             const sx = worldToScreenX(worldX);
             const sy = worldToScreenY(worldY + 1, camY);
-            ctx.fillRect(sx, sy, blockSize, blockSize);
+            ctx.fillRect(sx - pad, sy - pad, blockSize + pad * 2, blockSize + pad * 2);
         }
+    }
 
-        // Only the highlighted (selected/hovered) segment, or a segment
-        // currently flagged as causing an invariant conflict, gets a glowing
-        // outline traced around the boundary of its shape.
-        if (!isSelected && !isConflict) return;
-
+    function drawSegmentOutline(seg, visOff, camY, isConflict) {
         const edges = computeExteriorEdges(seg);
         ctx.save();
         ctx.lineJoin = 'round';
@@ -707,7 +917,6 @@
         avgX /= seg.blocks.length;
         avgY /= seg.blocks.length;
 
-        // Anchor point sits just above the segment's bounding centre.
         const anchorX = worldToScreenX(avgX + 0.5);
         const anchorY = worldToScreenY(avgY + 0.5, camY) - 14;
 
@@ -734,13 +943,22 @@
 
         drawGrid(camY);
 
+        const visOffs = new Map();
         for (const seg of scene.segments) {
-            const visOff = getVisualOffset(seg, t);
+            const visOff = getVisualOffset(seg, getSegmentInternalTime(seg, t));
+            visOffs.set(seg.id, visOff);
+            drawSegmentFill(seg, visOff, camY);
+        }
+
+        for (const seg of scene.segments) {
             const isSelected = seg.id === selectedSegmentId;
             const isConflict = conflictSegments.has(seg.id) && performance.now() < conflictUntil;
+            if (!isSelected && !isConflict) continue;
+            drawSegmentOutline(seg, visOffs.get(seg.id), camY, isConflict);
+        }
 
-            drawSegmentBlocks(seg, visOff, camY, isSelected, isConflict);
-            drawSegmentName(seg, visOff, camY);
+        for (const seg of scene.segments) {
+            drawSegmentName(seg, visOffs.get(seg.id), camY);
         }
     }
 
@@ -761,21 +979,26 @@
         };
     }
 
-    function hitTestLogical() {
+    function hitTestBlock() {
         const camY = getCameraY();
         for (const seg of scene.segments) {
-            const offset = getSegmentOffset(seg, logicalTime);
+            const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
             for (const b of seg.blocks) {
                 const worldX = b.x;
                 const worldY = b.y + offset;
                 const sx = worldToScreenX(worldX);
                 const sy = worldToScreenY(worldY + 1, camY);
                 if (mouseX >= sx && mouseX <= sx + blockSize && mouseY >= sy && mouseY <= sy + blockSize) {
-                    return seg.id;
+                    return { segId: seg.id, blockX: b.x, blockY: b.y };
                 }
             }
         }
         return null;
+    }
+
+    function hitTestLogical() {
+        const hit = hitTestBlock();
+        return hit ? hit.segId : null;
     }
 
     // ---------- Block editing ----------
@@ -785,23 +1008,21 @@
         if (!seg) return;
 
         const cell = getGridCellFromMouse();
-        const offset = getSegmentOffset(seg, logicalTime);
+        const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
         const startPos = { x: cell.x, y: cell.y - offset };
 
-        // Right-clicking on an existing segment does nothing.
         if (seg.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
         for (const s of scene.segments) {
             if (s.blocks.some(b => b.x === startPos.x && b.y === startPos.y)) return;
         }
-        // Also check current logical occupancy.
         for (const s of scene.segments) {
-            const off = getSegmentOffset(s, logicalTime);
+            const off = getLogicalOffset(s, getSegmentInternalTime(s, logicalTime));
             if (s.blocks.some(b => b.x === cell.x && b.y + off === cell.y)) return;
         }
 
         const oldScene = cloneScene(scene);
         seg.blocks.push(startPos);
-        const result = validateScene(scene);
+        const result = validateSceneUnfrozen(scene);
 
         if (result.valid) {
             clearConflicts();
@@ -830,7 +1051,7 @@
 
         const exactScene = cloneScene(dragStartScene);
         if (!translateSegmentInScene(exactScene, draggingSegmentId, dx, dy)) return false;
-        let result = validateScene(exactScene);
+        let result = validateSceneUnfrozen(exactScene);
         if (result.valid) {
             scene = exactScene;
             clearConflicts();
@@ -840,13 +1061,10 @@
             return true;
         }
 
-        // If the requested displacement is diagonal, try the horizontal
-        // component first, then the vertical component. A direction is
-        // diagonal precisely when both snapped grid components are non-zero.
         if (dx !== 0 && dy !== 0) {
             const horizontalScene = cloneScene(dragStartScene);
             translateSegmentInScene(horizontalScene, draggingSegmentId, dx, 0);
-            result = validateScene(horizontalScene);
+            result = validateSceneUnfrozen(horizontalScene);
             if (result.valid) {
                 scene = horizontalScene;
                 clearConflicts();
@@ -858,7 +1076,7 @@
 
             const verticalScene = cloneScene(dragStartScene);
             translateSegmentInScene(verticalScene, draggingSegmentId, 0, dy);
-            result = validateScene(verticalScene);
+            result = validateSceneUnfrozen(verticalScene);
             if (result.valid) {
                 scene = verticalScene;
                 clearConflicts();
@@ -869,8 +1087,6 @@
             }
         }
 
-        // Keep the last valid position. Conflicts are deliberately not
-        // committed to the scene; the user gets feedback instead.
         if (result && !result.valid) {
             setConflicts(result.conflicts);
         }
@@ -915,15 +1131,16 @@
         if (!seg) return;
 
         const cell = getGridCellFromMouse();
-        const offset = getSegmentOffset(seg, logicalTime);
+        const offset = getLogicalOffset(seg, getSegmentInternalTime(seg, logicalTime));
         const idx = seg.blocks.findIndex(b => b.x === cell.x && b.y + offset === cell.y);
         if (idx === -1) return;
 
         const oldScene = cloneScene(scene);
         seg.blocks.splice(idx, 1);
-        const result = validateScene(scene);
+        const result = validateSceneUnfrozen(scene);
 
         if (result.valid) {
+            leftMouseDownRemovedBlock = true;
             clearConflicts();
             showStatus('Block removed.', false);
             updateUI();
@@ -941,7 +1158,7 @@
         if (!seg) return;
         const oldScene = cloneScene(scene);
         seg.colour = colour;
-        const result = validateScene(scene);
+        const result = validateSceneUnfrozen(scene);
         if (result.valid) {
             clearConflicts();
             showStatus('Colour changed.', false);
@@ -983,12 +1200,11 @@
             colour: 'slime',
             name: '',
             blocks: [],
-            // A newly created segment must itself satisfy every movement
-            // invariant before the user edits it.
-            movement: makeMovement(scene.L, scene.B)
+            movement: rotateMovementToStartAt(scene.defaultMovement, logicalTime, scene.L),
+            frozen: false
         });
 
-        const result = validateScene(scene);
+        const result = validateSceneUnfrozen(scene);
         if (!result.valid) {
             scene = oldScene;
             setConflicts(result.conflicts);
@@ -1012,6 +1228,78 @@
         createNewSegment(true);
     }
 
+    // ---------- Copy / paste ----------
+    function copySegmentUnderMouse() {
+        const hit = hitTestBlock();
+        if (!hit) {
+            showStatus('No block under the cursor to copy.');
+            return;
+        }
+        const seg = scene.segments.find(s => s.id === hit.segId);
+        if (!seg) return;
+
+        clipboard = {
+            colour: seg.colour,
+            name: seg.name,
+            blocks: seg.blocks.map(b => ({ x: b.x, y: b.y })),
+            movement: seg.movement.slice(),
+            frozen: !!seg.frozen,
+            frozenInternalTime: seg.frozen ? seg.frozenInternalTime : undefined,
+            anchor: { x: hit.blockX, y: hit.blockY }
+        };
+        showStatus('Segment copied.', false);
+    }
+
+    function pasteSegmentAtMouse() {
+        if (!clipboard) {
+            showStatus('Nothing to paste.');
+            return;
+        }
+        if (clipboard.movement.length !== scene.L) {
+            showStatus('Cannot paste: copied segment has a different cycle length (L).');
+            return;
+        }
+
+        const oldScene = cloneScene(scene);
+        const cell = getGridCellFromMouse();
+        const id = scene.nextId++;
+
+        const newSeg = {
+            id,
+            colour: clipboard.colour,
+            name: clipboard.name,
+            blocks: clipboard.blocks.map(b => ({ x: b.x, y: b.y })),
+            movement: clipboard.movement.slice(),
+            frozen: clipboard.frozen,
+            frozenInternalTime: clipboard.frozen ? clipboard.frozenInternalTime : undefined
+        };
+
+        const internalT = getSegmentInternalTime(newSeg, logicalTime);
+        const offset = getLogicalOffset(newSeg, internalT);
+        const dx = cell.x - clipboard.anchor.x;
+        const dy = (cell.y - offset) - clipboard.anchor.y;
+        for (const b of newSeg.blocks) {
+            b.x += dx;
+            b.y += dy;
+        }
+
+        scene.segments.push(newSeg);
+        const result = validateSceneUnfrozen(scene);
+
+        if (!result.valid) {
+            scene = oldScene;
+            setConflicts(result.conflicts);
+            showStatus('Paste would violate invariants: ' + result.errors[0]);
+            updateUI();
+            return;
+        }
+
+        clearConflicts();
+        selectedSegmentId = id;
+        showStatus('Segment pasted.', false);
+        updateUI();
+    }
+
     // ---------- Timings ----------
     function unfoldTiming(raw) {
         const out = [];
@@ -1026,8 +1314,6 @@
         return out;
     }
 
-    // Folds a movement array back into the m/w abbreviated display form:
-    // "12" -> "m", "00" -> "w", read greedily left to right.
     function foldTiming(movement) {
         const raw = movement.join('');
         let out = '';
@@ -1069,7 +1355,7 @@
 
         const oldScene = cloneScene(scene);
         seg.movement = unfolded;
-        const result = validateScene(scene);
+        const result = validateSceneUnfrozen(scene);
 
         if (result.valid) {
             clearConflicts();
@@ -1085,7 +1371,24 @@
         }
     }
 
-    // ---------- Meta ----------
+    function applyDefaultTiming() {
+        const raw = document.getElementById('defaultTimingInput').value;
+        const unfolded = unfoldTiming(raw);
+        if (!unfolded) {
+            showStatus('Default timings may only contain 0, 1, 2, m, w.');
+            return;
+        }
+        const check = validateMovementPattern(unfolded, scene.L, scene.B);
+        if (!check.valid) {
+            showStatus('Default timings invalid: ' + check.error);
+            return;
+        }
+        scene.defaultMovement = unfolded;
+        showStatus('Default timings updated.', false);
+        updateUI();
+    }
+
+    // ---------- Meta (unused, kept for compatibility) ----------
     function findUniformPairStarts(movements, wantValue) {
         const L = movements[0]?.length ?? 0;
         const starts = [];
@@ -1187,31 +1490,29 @@
         let success = true;
 
         if (newL > oldL) {
-            // First pad with synchronized zero-time columns; this can make a
-            // larger B reachable without ever violating the old invariants.
             while (scene.L < newL) {
                 for (const seg of scene.segments) seg.movement.push(0);
                 scene.L++;
             }
             if (!changeBInPlace(newB)) success = false;
         } else {
-            // Adjust B first, then only delete columns that are all zero.
             if (!changeBInPlace(newB)) success = false;
             if (success && newL < oldL) success = removeZeroColumns(newL);
         }
 
-        // If this careful transformation worked, verify every invariant.
         if (success) {
             scene.L = newL;
             scene.B = newB;
-            const result = validateScene(scene);
+            const result = validateSceneUnfrozen(scene);
             success = result.valid;
         }
+
+        let usedFallback = false;
 
         if (!success) {
             scene = oldScene;
             const proceed = confirm(
-                `L=${newL}, B=${newB} cannot be reached without violating the timing invariants using the safe transformation.\\n\\n` +
+                `L=${newL}, B=${newB} cannot be reached without violating the timing invariants using the safe transformation.\n\n` +
                 `Reset all segment timings so each segment moves B times at the very start of the cycle and waits for the rest?`
             );
             if (!proceed) {
@@ -1228,7 +1529,7 @@
                 return;
             }
 
-            const fallbackResult = validateScene(scene);
+            const fallbackResult = validateSceneUnfrozen(scene);
             if (!fallbackResult.valid) {
                 scene = oldScene;
                 document.getElementById('L').value = oldScene.L;
@@ -1237,9 +1538,18 @@
                 showStatus('Fallback timing reset would violate invariants; no changes made.');
                 return;
             }
-            showStatus('Meta applied using fallback timing reset.', false);
-        } else {
-            showStatus('Meta applied.', false);
+            usedFallback = true;
+        }
+
+        let defaultRegenerated = false;
+        if (!validateMovementPattern(scene.defaultMovement, scene.L, scene.B).valid) {
+            scene.defaultMovement = makeMovement(scene.L, scene.B);
+            defaultRegenerated = true;
+        }
+
+        for (const seg of scene.segments) {
+            seg.frozen = false;
+            delete seg.frozenInternalTime;
         }
 
         playing = false;
@@ -1251,12 +1561,15 @@
         clearConflicts();
         document.getElementById('L').value = scene.L;
         document.getElementById('B').value = scene.B;
+
+        let msg = usedFallback ? 'Meta applied using fallback timing reset.' : 'Meta applied.';
+        if (defaultRegenerated) msg += ' Default timings were also reset to fit the new L/B.';
+        showStatus(msg, false);
         updateUI();
     }
 
     // ---------- Export / Import ----------
     function exportJSON() {
-        // Compact, no newlines or extra whitespace, to keep copy/paste short.
         document.getElementById('jsonArea').value = JSON.stringify(scene);
         showStatus('Exported to textarea.', false);
     }
@@ -1269,7 +1582,16 @@
             data.B = Number(data.B);
             data.nextId = data.segments.reduce((max, s) => Math.max(max, s.id || 0), 0) + 1;
 
-            const result = validateScene(data);
+            for (const seg of data.segments) {
+                if (typeof seg.frozen !== 'boolean') seg.frozen = false;
+                if (seg.frozen && typeof seg.frozenInternalTime !== 'number') seg.frozenInternalTime = 0;
+                delete seg.timeOffset;
+            }
+            if (!Array.isArray(data.defaultMovement) || !validateMovementPattern(data.defaultMovement, data.L, data.B).valid) {
+                data.defaultMovement = makeMovement(data.L, data.B);
+            }
+
+            const result = validateSceneUnfrozen(data);
             if (!result.valid) {
                 setConflicts(result.conflicts);
                 showStatus('Import invalid: ' + result.errors[0]);
@@ -1284,6 +1606,7 @@
             transitionActive = false;
             document.getElementById('play').textContent = 'Play';
             clearConflicts();
+            clipboard = null;
             if (scene.segments.length > 0) selectedSegmentId = scene.segments[0].id;
             else selectedSegmentId = null;
             updateUI();
@@ -1303,10 +1626,10 @@
             div.className = 'seg-item' + (seg.id === selectedSegmentId ? ' selected' : '');
             const swatch = document.createElement('span');
             swatch.className = 'swatch';
-            swatch.style.background = COLOURS[seg.colour];
+            swatch.style.background = seg.frozen ? whiten(COLOURS[seg.colour], 0.7) : COLOURS[seg.colour];
             div.appendChild(swatch);
             const nameSpan = document.createElement('span');
-            nameSpan.textContent = seg.name || `Segment ${seg.id}`;
+            nameSpan.textContent = seg.name || '';
             div.appendChild(nameSpan);
             div.addEventListener('click', () => {
                 selectSegment(seg.id);
@@ -1338,10 +1661,22 @@
             `t = ${logicalTime} / ${scene.L} rt`;
     }
 
+    function updateDefaultTimingDisplay() {
+        document.getElementById('defaultTimingInput').value = foldTiming(scene.defaultMovement);
+    }
+
+    function updateCycleMetaDisplay() {
+        const bps = (10 * scene.B / scene.L).toFixed(2);
+        document.getElementById('cycle-meta-display').textContent =
+            `speed is ${scene.B} blocks in ${scene.L}rt, or ${bps}bps`;
+    }
+
     function updateUI() {
         updateSegmentList();
         updateSelectedPanel();
         updateTimeDisplay();
+        updateDefaultTimingDisplay();
+        updateCycleMetaDisplay();
         draw();
     }
 
@@ -1368,8 +1703,6 @@
             playing = true;
             document.getElementById('play').textContent = 'Pause';
         } else {
-            // Do not freeze mid-cycle. Finish the current visual interval,
-            // then stop exactly at the next logical integer.
             pauseAtNextLogical = true;
         }
         updateUI();
@@ -1378,9 +1711,52 @@
     function handleKeyboard(e) {
         if (e.target.matches('input, textarea, select')) return;
 
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+            e.preventDefault();
+            copySegmentUnderMouse();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+            e.preventDefault();
+            pasteSegmentAtMouse();
+            return;
+        }
+
         if (e.code === 'Space') {
             e.preventDefault();
             togglePlay();
+            return;
+        }
+
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            stepTime(-arrowStepSize);
+            return;
+        }
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            stepTime(arrowStepSize);
+            return;
+        }
+
+        if (!e.ctrlKey && !e.metaKey) {
+            const k = e.key.toLowerCase();
+            if (k === 'w') { panKeysHeld.w = true; return; }
+            if (k === 'a') { panKeysHeld.a = true; return; }
+            if (k === 's') { panKeysHeld.s = true; return; }
+            if (k === 'd') { panKeysHeld.d = true; return; }
+        }
+
+        if (e.key.toLowerCase() === 'f') {
+            if (!fKeyHeld) {
+                fKeyHeld = true;
+                fToggledThisSession = new Set();
+                if (selectedSegmentId !== null) {
+                    toggleFreezeById(selectedSegmentId);
+                    fToggledThisSession.add(selectedSegmentId);
+                }
+            }
+            e.preventDefault();
             return;
         }
 
@@ -1396,32 +1772,70 @@
         }
     }
 
+    function handleKeyUp(e) {
+        const k = e.key.toLowerCase();
+        if (k === 'w') panKeysHeld.w = false;
+        if (k === 'a') panKeysHeld.a = false;
+        if (k === 's') panKeysHeld.s = false;
+        if (k === 'd') panKeysHeld.d = false;
+        if (k === 'f') {
+            fKeyHeld = false;
+            fToggledThisSession = new Set();
+        }
+    }
+
+    window.addEventListener('blur', () => {
+        panKeysHeld.w = panKeysHeld.a = panKeysHeld.s = panKeysHeld.d = false;
+        fKeyHeld = false;
+        fToggledThisSession = new Set();
+    });
+
     // ---------- Animation loop ----------
+    const KEY_PAN_SPEED = 8; // world units (blocks) per second
     let lastTime = performance.now();
     function animate(now) {
         const dt = (now - lastTime) / 1000;
 
+        if (panKeysHeld.w) panOffsetY += KEY_PAN_SPEED * dt;
+        if (panKeysHeld.s) panOffsetY -= KEY_PAN_SPEED * dt;
+        if (panKeysHeld.a) panOffsetX -= KEY_PAN_SPEED * dt;
+        if (panKeysHeld.d) panOffsetX += KEY_PAN_SPEED * dt;
+
         if (!playing && transitionActive) {
-            const distance = transitionTarget - visualTime;
+            const oldVisual = visualTime;
+            const distance = transitionTarget - oldVisual;
             const transitionSpeed = Math.max(4, playSpeed * 4);
             const move = transitionSpeed * dt;
+            let newVisual;
             if (Math.abs(distance) <= move) {
-                visualTime = transitionTarget;
+                newVisual = transitionTarget;
                 transitionActive = false;
             } else {
-                visualTime += Math.sign(distance) * move;
+                newVisual = oldVisual + Math.sign(distance) * move;
             }
+
+            // Detect if we crossed the wrap point
+            if ((oldVisual < scene.L && newVisual >= scene.L) ||
+                (oldVisual >= scene.L && newVisual < oldVisual)) {
+                shiftFrozenBlocksOnWrap();
+            }
+
+            visualTime = normaliseTime(newVisual);
         }
 
         if (playing) {
             const oldVisual = visualTime;
-            visualTime = normaliseTime(visualTime + dt * playSpeed);
+            const newVisualRaw = oldVisual + dt * playSpeed;
+            if (oldVisual < scene.L && newVisualRaw >= scene.L) {
+                shiftFrozenBlocksOnWrap();
+            }
+            visualTime = normaliseTime(newVisualRaw);
 
             if (pauseAtNextLogical) {
                 const oldFloor = Math.floor(oldVisual + 1e-9);
                 const newFloor = Math.floor(visualTime + 1e-9);
                 if (newFloor !== oldFloor || Math.abs(visualTime - Math.round(visualTime)) < 1e-6) {
-                    setLogicalTime(Math.round(visualTime));
+                    advanceLogicalTo(Math.round(visualTime));
                     visualTime = logicalTime;
                     playing = false;
                     pauseAtNextLogical = false;
@@ -1429,7 +1843,7 @@
                     updateTimeDisplay();
                 }
             } else {
-                setLogicalTime(Math.floor(visualTime + 1e-9));
+                advanceLogicalTo(Math.floor(visualTime + 1e-9));
                 updateTimeDisplay();
             }
         }
@@ -1443,8 +1857,6 @@
     canvas.addEventListener('mousedown', (e) => {
         updateMouse(e);
 
-        // Ctrl + left-drag moves a segment. Shift + left-drag pans.
-        // Ctrl + Shift + left-drag retains the old pan behaviour.
         if (e.button === 0 && e.ctrlKey && !e.shiftKey) {
             if (startSegmentDrag()) {
                 e.preventDefault();
@@ -1466,6 +1878,8 @@
             e.preventDefault();
         } else if (e.button === 0) {
             leftMouseDown = true;
+            leftMouseDownWasEmpty = !hitTestBlock();
+            leftMouseDownRemovedBlock = false;
             removeBlockAtMouse();
         }
     });
@@ -1497,6 +1911,11 @@
                 hoveredSegmentId = hit;
                 selectedSegmentId = hit;
                 updateUI();
+
+                if (fKeyHeld && !fToggledThisSession.has(hit)) {
+                    toggleFreezeById(hit);
+                    fToggledThisSession.add(hit);
+                }
             } else {
                 hoveredSegmentId = null;
             }
@@ -1508,6 +1927,11 @@
         if (e.button === 0) {
             leftMouseDown = false;
             endSegmentDrag();
+            if (leftMouseDownWasEmpty && !leftMouseDownRemovedBlock) {
+                createNewSegment(true);
+            }
+            leftMouseDownWasEmpty = false;
+            leftMouseDownRemovedBlock = false;
         }
         panning = false;
     });
@@ -1515,6 +1939,8 @@
     canvas.addEventListener('mouseleave', () => {
         rightMouseDown = false;
         leftMouseDown = false;
+        leftMouseDownWasEmpty = false;
+        leftMouseDownRemovedBlock = false;
         panning = false;
         endSegmentDrag();
     });
@@ -1533,7 +1959,6 @@
         zoomScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomScale * zoomFactor));
         blockSize = baseBlockSize * zoomScale;
 
-        // Keep the point under the cursor stationary while zooming.
         panOffsetX = worldXBefore - (mouseX - originX) / blockSize;
         panOffsetY = (worldYBefore - camY) - (originY - mouseY) / blockSize;
 
@@ -1547,12 +1972,17 @@
     document.getElementById('step+1').addEventListener('click', () => stepTime(1));
     document.getElementById('step+2').addEventListener('click', () => stepTime(2));
     document.getElementById('play').addEventListener('click', togglePlay);
-    document.getElementById('applyMeta').addEventListener('click', applyMeta);
     document.getElementById('applyTiming').addEventListener('click', applyTiming);
+    document.getElementById('applyDefaultTiming').addEventListener('click', applyDefaultTiming);
     document.getElementById('export').addEventListener('click', exportJSON);
     document.getElementById('import').addEventListener('click', importJSON);
     document.getElementById('newSegment').addEventListener('click', () => createNewSegment(true));
+    document.getElementById('arrowStepToggle').addEventListener('click', () => {
+        arrowStepSize = arrowStepSize === 1 ? 2 : 1;
+        document.getElementById('arrowStepToggle').textContent = arrowStepSize + ' rt';
+    });
     window.addEventListener('keydown', handleKeyboard);
+    window.addEventListener('keyup', handleKeyUp);
 
     const speedSlider = document.getElementById('speedSlider');
     const speedValue = document.getElementById('speedValue');
@@ -1586,9 +2016,8 @@
         pauseAtNextLogical = false;
         transitionActive = false;
         transitionTarget = 0;
+        clipboard = null;
         selectedSegmentId = scene.segments.length ? scene.segments[0].id : null;
-        document.getElementById('L').value = scene.L;
-        document.getElementById('B').value = scene.B;
         document.getElementById('setup-screen').style.display = 'none';
         resizeCanvas();
         updateUI();
@@ -1613,7 +2042,6 @@
         startEditor(L, B);
     });
 
-    // Keep the original editor running only after the initial flyer is created.
     resizeCanvas();
     requestAnimationFrame(animate);
 
